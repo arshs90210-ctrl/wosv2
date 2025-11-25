@@ -3,145 +3,185 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WorldOS // Sovereign Node</title>
+    <title>WorldOS: Sovereign Data Funds Platform</title>
     
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     
+    <!-- Icons & Utilities -->
     <script src="https://unpkg.com/feather-icons"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
+    <!-- Firebase Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs, arrayUnion, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        window.firebase = {
+            initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
+            createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
+            getFirestore, doc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs,
+            arrayUnion, addDoc, serverTimestamp
+        };
+    </script>
+    
+    <!-- Custom Theme (Finance/Tech Merge) and Core Styles -->
     <style>
-        /* --- WORLD SKIN: DEFAULT (ZINC) --- */
+        /* --- INSTITUTIONAL AESTHETIC SYSTEM (Slate/Cyan) --- */
         :root {
-            --bg-os: #09090b; /* zinc-950 */
-            --bg-panel: #121214; /* zinc-900 */
-            --bg-surface: #18181b; /* zinc-800 */
-            --border: #27272a; /* zinc-700 */
+            --bg-os: #0f172a; /* Slate 900 - Deep Blue/Trust */
+            --bg-panel: #1e293b; /* Slate 800 */
+            --bg-surface: #334155; /* Slate 700 */
+            --border: #475569; /* Slate 600 */
             
-            --text-pri: #f4f4f5; /* zinc-50 */
-            --text-sec: #a1a1aa; /* zinc-400 */
-            --text-mono: #d4d4d8; /* zinc-300 */
-
-            --accent: #fff;
-            --accent-inv: #000;
+            --text-pri: #f8fafc; /* White/Clean */
+            --text-sec: #94a3b8; /* Slate 400 */
             
-            --indicator-ok: #22c55e; /* emerald-500 */
-            --indicator-warn: #eab308; /* amber-500 */
+            --accent: #06b6d4; /* Cyan 500 - Sharp, Tech Accent */
+            --accent-inv: #0f172a;
+            
+            --indicator-ok: #10b981; /* Emerald 500 */
+            --indicator-warn: #f59e0b; /* Amber 500 (Yield) */
             
             --font-ui: 'Inter', sans-serif;
             --font-code: 'JetBrains Mono', monospace;
         }
-        /* Tailwind and custom CSS classes based on theme vars */
+
+        /* General element styling based on theme vars */
         .bg-os { background-color: var(--bg-os); }
         .bg-panel { background-color: var(--bg-panel); }
         .bg-surface { background-color: var(--bg-surface); }
         .border-theme { border-color: var(--border); }
         .text-primary { color: var(--text-pri); }
         .text-secondary { color: var(--text-sec); }
-        .indicator-ok { background-color: var(--indicator-ok); box-shadow: 0 0 10px var(--indicator-ok); }
-        .font-code { font-family: var(--font-code); }
+        .text-accent { color: var(--accent); }
         .nav-item { color: var(--text-sec); transition: 0.2s; }
         .nav-item:hover, .nav-item.active { background: var(--bg-surface); color: var(--text-pri); }
         .fade-in { animation: fadeIn 0.3s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* Ledger entry style */
-        .ledger-entry { background-color: var(--bg-surface); border: 1px solid var(--border); }
-
-        /* Fix the layout issue: ensure the body takes full width and height */
-        body { 
-            width: 100vw; /* Take full viewport width */
-            height: 100vh; /* Take full viewport height */
-        }
-        /* The main content area needs overflow-y to handle its content, and flex-1 to occupy remaining width */
-        #main > .flex-1.overflow-hidden.relative {
-            overflow-y: auto !important; /* Allow internal scrolling for content */
-            overflow-x: hidden !important; /* Prevent horizontal overflow */
+        /* Full screen overlay for Auth */
+        #auth-overlay {
+            background-color: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
         }
     </style>
 </head>
-<body class="flex">
+<body class="flex bg-os">
 
+    <!-- AUTHENTICATION OVERLAY/MODAL -->
+    <div id="auth-overlay" class="fixed inset-0 flex items-center justify-center p-4 text-primary">
+        <div class="bg-panel border border-theme p-8 rounded-lg w-full max-w-md shadow-2xl fade-in">
+            <h2 class="text-2xl font-bold mb-6 text-accent" id="auth-title">Welcome to WorldOS</h2>
+            <p class="text-secondary mb-6 text-sm">Please sign in to access your Sovereign Node and Data Portfolio.</p>
+            
+            <!-- Auth Form -->
+            <input type="text" id="auth-email" placeholder="Email" class="w-full bg-surface border border-theme p-3 rounded mb-3 focus:ring-accent focus:border-accent">
+            <input type="password" id="auth-password" placeholder="Password" class="w-full bg-surface border border-theme p-3 rounded mb-4 focus:ring-accent focus:border-accent">
+            
+            <!-- User Type Selection (Critical for Valuation) -->
+            <select id="auth-user-type" class="w-full bg-surface border border-theme p-3 rounded mb-4 text-secondary focus:ring-accent focus:border-accent">
+                <option value="individual">Individual Data Sovereign (Yield Earner)</option>
+                <option value="company">Enterprise Data Buyer (SDA/SaaS Client)</option>
+            </select>
+
+            <button onclick="Auth.signIn()" class="w-full bg-accent text-accent-inv font-semibold p-3 rounded mb-2 hover:bg-opacity-80 transition-opacity">
+                Sign In
+            </button>
+            <button onclick="Auth.signUp()" class="w-full bg-surface text-primary border border-theme font-medium p-3 rounded hover:bg-theme-panel transition-colors">
+                Register New Account
+            </button>
+            
+            <p id="auth-error" class="text-red-500 text-sm mt-3 h-5"></p>
+        </div>
+    </div>
+
+    <!-- MAIN APP STRUCTURE -->
     <aside class="w-60 bg-panel border-r border-theme flex flex-col z-20 h-full shrink-0">
+        <!-- Sidebar Content... -->
         <div class="p-6 flex items-center gap-3 select-none border-b border-theme">
-            <i data-feather="hexagon" class="text-white"></i>
+            <i data-feather="hexagon" class="text-accent"></i>
             <div>
-                <h1 class="font-bold tracking-tight text-lg leading-none font-code text-primary">WORLD<span class="opacity-50">OS</span></h1>
-                <span class="text-[10px] text-secondary font-code uppercase tracking-widest">Sovereign Node</span>
+                <h1 class="font-bold tracking-tight text-lg leading-none font-code text-primary">DATA<span class="opacity-50">OS</span></h1>
+                <span class="text-[10px] text-secondary font-code uppercase tracking-widest">Sovereign Funds</span>
             </div>
         </div>
 
         <nav class="flex-1 px-4 py-4 space-y-1">
             <button onclick="Router.nav('dashboard', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium active">
-                <i data-feather="grid" class="w-4 h-4"></i> Overview
+                <i data-feather="grid" class="w-4 h-4"></i> Dashboard
             </button>
             <button onclick="Router.nav('intelligence', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
-                <i data-feather="cpu" class="w-4 h-4"></i> Neural Core
+                <i data-feather="cpu" class="w-4 h-4"></i> Neural Core (PoU)
             </button>
             <button onclick="Router.nav('vault', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
                 <i data-feather="database" class="w-4 h-4"></i> Data Vault
             </button>
-            <button onclick="Router.nav('ledger', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
-                <i data-feather="list" class="w-4 h-4"></i> Proof Ledger
-            </button>
             <button onclick="Router.nav('marketplace', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
-                <i data-feather="zap" class="w-4 h-4 text-indicator-warn"></i> Data Market
+                <i data-feather="dollar-sign" class="w-4 h-4 text-indicator-warn"></i> Data Funds & Yield
+            </button>
+            <button onclick="Router.nav('ledger', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
+                <i data-feather="list" class="w-4 h-4"></i> Transaction Ledger
             </button>
         </nav>
 
         <div class="p-4 border-t border-theme">
-            <div class="flex items-center gap-3">
-                <div class="w-3 h-3 rounded-full indicator-ok animate-pulse"></div>
-                <span class="text-xs text-secondary font-code">LOCAL RUNTIME ACTIVE</span>
-            </div>
+             <button onclick="Auth.signOut()" class="w-full text-secondary hover:text-red-400 text-sm flex items-center gap-2 transition-colors">
+                <i data-feather="log-out" class="w-4 h-4"></i> Sign Out
+            </button>
+            <p class="text-[10px] text-zinc-600 mt-2 font-code truncate" id="user-display">User: Guest | Type: None</p>
         </div>
     </aside>
 
+    <!-- MAIN CONTENT AREA -->
     <div id="main" class="flex-1 flex flex-col relative bg-os overflow-hidden"> 
-        
+        <!-- HEADER -->
         <header class="h-14 border-b border-theme flex items-center justify-between px-6 sticky top-0 bg-panel/80 backdrop-blur-sm z-10 shrink-0">
             <div class="text-xs font-code text-secondary">
-                root@local-node ~ <span class="text-primary" id="breadcrumb">/dashboard</span>
+                <span id="current-user-type">Individual</span> Node ~ <span class="text-primary" id="breadcrumb">/dashboard</span>
             </div>
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-theme">
-                    <i data-feather="hard-drive" class="w-3 h-3 text-secondary"></i>
+                    <i data-feather="server" class="w-3 h-3 text-secondary"></i>
                     <span class="text-xs font-code text-primary" id="storage-usage">0 MB</span>
                 </div>
             </div>
         </header>
 
+        <!-- CONTENT VIEWS CONTAINER -->
         <div class="flex-1 relative">
             
-            <div id="view-dashboard" class="view-section absolute inset-0 p-8 overflow-y-auto fade-in active">
-                <h2 class="text-2xl font-medium mb-6">System Overview 👋</h2>
+            <!-- 1. DASHBOARD VIEW -->
+            <div id="view-dashboard" class="view-section absolute inset-0 p-8 fade-in active">
+                <h2 class="text-2xl font-medium mb-6 text-accent">Data Fund Portfolio Summary</h2>
                 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <div class="bg-surface border border-theme p-5 rounded-lg">
-                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Vault Usage</div>
-                        <div class="text-3xl font-code text-primary" id="dash-usage-val">0 MB</div>
-                        <div class="mt-2 text-xs text-indicator-ok flex items-center gap-1">
-                            <i data-feather="lock" class="w-3 h-3 text-indicator-ok"></i> IndexedDB Persistent
-                        </div>
+                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Total Yield Earned</div>
+                        <div class="text-3xl font-code text-indicator-ok" id="dash-yield">$0.00</div>
+                        <div class="mt-2 text-xs text-secondary">Lifetime Royalties (Post-Commission)</div>
                     </div>
                     <div class="bg-surface border border-theme p-5 rounded-lg">
-                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Ledger Height</div>
-                        <div class="text-3xl font-code text-primary" id="dash-ledger">0</div>
-                        <div class="mt-2 text-xs text-secondary">Proof-of-Deposit Blocks</div>
+                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Fund Allocation</div>
+                        <div class="text-3xl font-code text-primary" id="dash-funds-count">0</div>
+                        <div class="mt-2 text-xs text-secondary">Active Funds Contributed To</div>
                     </div>
                     <div class="bg-surface border border-theme p-5 rounded-lg">
-                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Market Portfolio Value</div>
-                        <div class="text-3xl font-code text-primary text-indicator-warn" id="dash-market-val">$0.00</div>
-                        <div class="mt-2 text-xs text-secondary">Simulated Local Valuation</div>
+                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Verified Utility Score (PoU)</div>
+                        <div class="text-3xl font-code text-primary text-accent" id="dash-pou-score">0%</div>
+                        <div class="mt-2 text-xs text-secondary">Average PoU of Listed Assets</div>
                     </div>
                 </div>
 
+                <!-- Visualization Module (Proof of Utility) -->
                 <div class="bg-surface border border-theme rounded-lg p-6 mb-8">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-medium">Vault Deposit Trend</h3>
-                        <span class="text-xs text-secondary font-code">LOCAL ANALYTICS</span>
+                        <h3 class="text-lg font-medium">Proof of Utility (PoU) Activity</h3>
+                        <span class="text-xs text-secondary font-code">LOCAL RAG INFERENCE</span>
                     </div>
                     <div class="h-48">
                         <canvas id="vaultChart"></canvas>
@@ -149,22 +189,60 @@
                 </div>
             </div>
 
-            <div id="view-intelligence" class="view-section absolute inset-0 hidden p-8 overflow-y-auto">
+            <!-- 4. LEDGER VIEW (Renamed to Transaction Ledger) -->
+            <div id="view-ledger" class="view-section absolute inset-0 hidden p-8 fade-in">
+                <h2 class="text-2xl font-medium mb-6 text-accent">Transaction Ledger (PoD & Yield) ⛓️</h2>
+                <div class="space-y-2" id="ledger-list">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+            
+            <!-- 5. DATA MARKETPLACE VIEW (Data Funds & Yield) -->
+            <div id="view-marketplace" class="view-section absolute inset-0 hidden p-8 fade-in">
+                <h2 class="text-2xl font-medium mb-4 text-accent">Data Funds Index</h2>
+                <p class="text-secondary mb-6">Invest your data into thematic funds to earn passive, recurring yield (royalties).</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8" id="data-funds-list">
+                    <!-- Funds are loaded here by JS -->
+                </div>
+                
+                <h3 class="text-xl font-medium mt-8 mb-4 text-accent">My Yield Portfolio</h3>
+                <div class="bg-panel border border-theme rounded-lg overflow-hidden">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-zinc-900/50 text-zinc-500 font-medium border-b border-theme">
+                            <tr>
+                                <th class="px-6 py-3">Fund Name</th>
+                                <th class="px-6 py-3">Your Allocation</th>
+                                <th class="px-6 py-3">Last Payout</th>
+                                <th class="px-6 py-3">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="yield-portfolio-list">
+                            <tr><td colspan="4" class="px-6 py-4 text-center text-secondary">You are not currently allocated to any fund.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- 2. NEURAL CORE VIEW -->
+            <div id="view-intelligence" class="view-section absolute inset-0 hidden p-8">
                 <div class="flex flex-col h-full bg-panel border border-theme rounded-lg overflow-hidden">
+                    <!-- Chat history... -->
                     <div class="flex-1 p-5 font-code text-sm space-y-4" id="chat-history">
                         <div class="flex items-start gap-4">
                             <div class="w-8 h-8 rounded bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
                                 <i data-feather="cpu" class="w-4 h-4 text-indicator-ok"></i>
                             </div>
                             <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 max-w-2xl text-sm leading-relaxed text-zinc-300">
-                                <p><strong>Neural Core Online.</strong> I am running a local **Retrieval Augmented Generation (RAG)** system.</p>
-                                <p class="mt-2">I have access to the data in your IndexedDB Vault. **No external API key is required.**</p>
+                                <p><strong>Neural Core Online.</strong> Run RAG queries on your uploaded financial data (e.g., "Normalize all Q4 transactions").</p>
+                                <p class="mt-2">This generates **Proof of Utility (PoU)**, increasing your data's value for the Funds.</p>
                             </div>
                         </div>
                     </div>
+                    <!-- Chat Input -->
                     <div class="p-4 border-t border-theme bg-theme-panel shrink-0">
                         <div class="max-w-4xl mx-auto relative">
-                            <input type="text" id="ai-input" placeholder="Query your local data..." class="w-full bg-zinc-900 border border-zinc-700 rounded-md py-3 pl-4 pr-12 text-sm text-white focus:border-white transition-colors">
+                            <input type="text" id="ai-input" placeholder="Query your local data..." class="w-full bg-zinc-900 border border-zinc-700 rounded-md py-3 pl-4 pr-12 text-sm text-white focus:ring-accent focus:border-accent">
                             <button onclick="AI.send()" class="absolute right-2 top-2 p-1.5 hover:bg-zinc-800 rounded text-secondary hover:text-white transition-colors">
                                 <i data-feather="arrow-up" class="w-4 h-4"></i>
                             </button>
@@ -173,11 +251,12 @@
                 </div>
             </div>
 
-            <div id="view-vault" class="view-section absolute inset-0 hidden p-8 overflow-y-auto fade-in">
+            <!-- 3. DATA VAULT VIEW -->
+            <div id="view-vault" class="view-section absolute inset-0 hidden p-8 fade-in">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-medium">Data Vault 🛡️</h2>
-                    <label class="cursor-pointer bg-white text-black hover:bg-zinc-200 px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-2">
-                        <i data-feather="plus" class="w-4 h-4"></i> Deposit File
+                    <label class="cursor-pointer bg-accent text-accent-inv hover:bg-opacity-80 px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-2">
+                        <i data-feather="upload-cloud" class="w-4 h-4"></i> Deposit Financial Data
                         <input type="file" class="hidden" id="file-upload" onchange="Vault.ingest(this)">
                     </label>
                 </div>
@@ -187,122 +266,281 @@
                         <thead class="bg-zinc-900 text-zinc-500 font-medium border-b border-theme">
                             <tr>
                                 <th class="px-6 py-3">Asset Name</th>
-                                <th class="px-6 py-3">Size</th>
-                                <th class="px-6 py-3">Encryption</th>
-                                <th class="px-6 py-3">Market Status</th>
+                                <th class="px-6 py-3">Category</th>
+                                <th class="px-6 py-3">PoU Score</th>
+                                <th class="px-6 py-3">Allocation</th>
                             </tr>
                         </thead>
                         <tbody id="vault-list" class="divide-y divide-zinc-800">
-                            </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div id="view-ledger" class="view-section absolute inset-0 hidden p-8 overflow-y-auto fade-in">
-                <h2 class="text-2xl font-medium mb-6">Proof of Deposit (PoD) Ledger ⛓️</h2>
-                <div class="space-y-2" id="ledger-list">
-                    </div>
-            </div>
-
-            <div id="view-marketplace" class="view-section absolute inset-0 hidden p-8 overflow-y-auto fade-in">
-                <h2 class="text-2xl font-medium mb-2">Sovereign Data Marketplace ⚡</h2>
-                <p class="text-secondary mb-6">Maintain **sovereignty** while connecting to corporate buyers. You control **when** and **if** your data (or a computed derivative) is sold.</p>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div class="bg-surface border border-theme p-5 rounded-lg">
-                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Portfolio Value</div>
-                        <div class="text-4xl font-code text-indicator-warn" id="market-portfolio">$0.00</div>
-                        <div class="mt-2 text-xs text-secondary">Total potential earnings from listed data assets.</div>
-                    </div>
-                    <div class="bg-surface border border-theme p-5 rounded-lg">
-                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Global Demand Index</div>
-                        <div class="text-4xl font-code text-primary" id="market-demand-index">7.8 / 10</div>
-                        <div class="mt-2 text-xs text-indicator-ok">High demand for **Health/Wellness** and **Finance** data.</div>
-                    </div>
-                </div>
-
-                <div class="bg-panel border border-theme rounded-lg overflow-hidden">
-                    <div class="px-6 py-4 bg-zinc-900 border-b border-theme text-primary font-medium">Your Data Assets for Sale</div>
-                    <table class="w-full text-sm text-left">
-                        <thead class="bg-zinc-900/50 text-zinc-500 font-medium border-b border-theme">
-                            <tr>
-                                <th class="px-6 py-3">Data Category</th>
-                                <th class="px-6 py-3">Data Count</th>
-                                <th class="px-6 py-3">Market Price (Sim)</th>
-                                <th class="px-6 py-3">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="market-list" class="divide-y divide-zinc-800">
-                            <tr><td colspan="4" class="px-6 py-4 text-center text-secondary">No data assets listed. Deposit files and list them in the Vault view.</td></tr>
+                            <!-- Populated by JS -->
                         </tbody>
                     </table>
                 </div>
             </div>
-            
+
         </div>
     </div>
 
+    <!-- JAVASCRIPT LOGIC -->
     <script>
-        feather.replace();
-
-        // --- CORE SYSTEM STATE ---
-        let WorldState = {
-            db: null,
-            marketAssets: [], // Stored in IndexedDB, loaded on init
-        };
-        const DB_NAME = 'WorldOS_SovereignNode';
+        // --- GLOBAL CONSTANTS ---
+        const DB_NAME = 'WorldOS_SovereignNode_Local';
         const DB_VERSION = 1;
+        const COMMISSION_RATE = 0.15; // WorldOS SaaS Commission
+        const BASE_ASSET_VALUE = 3000; // Base value for a single normalized financial SDA sold to enterprise
+        
+        let firebase; // Loaded async
+        let auth, db;
+        let userId = null;
+        let userType = null;
+        let userProfile = { totalYield: 0, funds: {} };
 
-        // --- 0. DATA PERSISTENCE (INDEXEDDB) ---
-        const DB = {
+        // --- GLOBAL STATE ---
+        let WorldState = {
+            db: null, // IndexedDB instance
+            dataFunds: [] // Firestore funds metadata
+        };
+        
+        // --- 0. DATA PERSISTENCE (INDEXEDDB - LOCAL CONTENT) ---
+        const LocalDB = {
             init: () => {
                 return new Promise((resolve, reject) => {
                     const request = indexedDB.open(DB_NAME, DB_VERSION);
-                    
                     request.onupgradeneeded = (e) => {
                         WorldState.db = e.target.result;
-                        // Create object stores (like tables in SQL)
                         WorldState.db.createObjectStore('files', { keyPath: 'id' });
-                        WorldState.db.createObjectStore('ledger', { keyPath: 'hash' });
-                        WorldState.db.createObjectStore('market', { keyPath: 'id' });
                     };
+                    request.onsuccess = (e) => { WorldState.db = e.target.result; resolve(); };
+                    request.onerror = (e) => { console.error("IndexedDB Error:", e.target.error); reject(e.target.error); };
+                });
+            },
+            getStore: (storeName, mode) => WorldState.db.transaction(storeName, mode).objectStore(storeName),
+            putFile: (file) => new Promise((resolve, reject) => {
+                const request = LocalDB.getStore('files', 'readwrite').put(file);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            }),
+            getAllFiles: () => new Promise((resolve, reject) => {
+                const request = LocalDB.getStore('files', 'readonly').getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            })
+        };
 
-                    request.onsuccess = (e) => {
-                        WorldState.db = e.target.result;
-                        console.log("IndexedDB Initialized successfully.");
-                        resolve();
-                    };
+        // --- 1. FIREBASE INITIALIZATION & AUTHENTICATION ---
+        const FirebaseInit = {
+            setup: async () => {
+                try {
+                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                    
+                    const app = firebase.initializeApp(firebaseConfig);
+                    db = firebase.getFirestore(app);
+                    auth = firebase.getAuth(app);
 
-                    request.onerror = (e) => {
-                        console.error("IndexedDB Error:", e.target.error);
-                        reject(e.target.error);
-                    };
-                });
+                    // Sign in securely using custom token provided by Canvas environment
+                    const initialToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '';
+                    if (initialToken) {
+                        await firebase.signInWithCustomToken(auth, initialToken);
+                    } else {
+                        await firebase.signInAnonymously(auth);
+                    }
+                    
+                    firebase.onAuthStateChanged(auth, FirebaseInit.handleAuthState);
+
+                } catch (e) {
+                    console.error("Firebase setup failed:", e);
+                    Auth.setError(`Initialization failed. Check console for details.`);
+                }
             },
-            getStore: (storeName, mode) => {
-                const tx = WorldState.db.transaction(storeName, mode);
-                return tx.objectStore(storeName);
+            handleAuthState: (user) => {
+                if (user) {
+                    userId = user.uid;
+                    document.getElementById('auth-overlay').classList.add('hidden');
+                    FirebaseInit.loadUserProfile(userId);
+                    UI.enableApp();
+                } else {
+                    // Show login screen if not authenticated (and not in the process of signing in)
+                    document.getElementById('auth-overlay').classList.remove('hidden');
+                    UI.disableApp();
+                }
             },
-            getAll: (storeName) => {
-                return new Promise((resolve, reject) => {
-                    const store = DB.getStore(storeName, 'readonly');
-                    const request = store.getAll();
-                    request.onsuccess = () => resolve(request.result);
-                    request.onerror = () => reject(request.error);
-                });
-            },
-            put: (storeName, data) => {
-                return new Promise((resolve, reject) => {
-                    const store = DB.getStore(storeName, 'readwrite');
-                    const request = store.put(data);
-                    request.onsuccess = () => resolve(request.result);
-                    request.onerror = () => reject(request.error);
-                });
+            loadUserProfile: (uid) => {
+                const userDocRef = firebase.doc(db, "artifacts", typeof __app_id !== 'undefined' ? __app_id : 'default-app-id', "users", uid, "profile", "data");
+                
+                firebase.onSnapshot(userDocRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        userProfile = docSnap.data();
+                        userType = userProfile.userType || 'individual';
+                    } else {
+                        // Initialize new user profile if doc doesn't exist
+                        userProfile = { totalYield: 0, funds: {}, userType: 'individual' };
+                        userType = 'individual';
+                        firebase.setDoc(userDocRef, userProfile);
+                    }
+                    UI.updateHeader();
+                    // Start listening to critical data streams only after profile is loaded
+                    DataFunds.listen();
+                    UI.renderLedger(); // Render Ledger when user is ready
+                }, (error) => console.error("Error loading user profile:", error));
             }
         };
 
+        const Auth = {
+            setError: (msg) => document.getElementById('auth-error').innerText = msg,
+            signIn: async () => {
+                Auth.setError('');
+                const email = document.getElementById('auth-email').value;
+                const password = document.getElementById('auth-password').value;
+                if (!email || !password) return Auth.setError("Email and password are required.");
+                try {
+                    await firebase.signInWithEmailAndPassword(auth, email, password);
+                } catch (error) {
+                    Auth.setError(error.message.replace('Firebase:', '').trim());
+                }
+            },
+            signUp: async () => {
+                Auth.setError('');
+                const email = document.getElementById('auth-email').value;
+                const password = document.getElementById('auth-password').value;
+                const selectedType = document.getElementById('auth-user-type').value;
+                if (!email || !password || password.length < 6) return Auth.setError("Password must be at least 6 characters.");
+                
+                try {
+                    const userCredential = await firebase.createUserWithEmailAndPassword(auth, email, password);
+                    const uid = userCredential.user.uid;
+                    const userDocRef = firebase.doc(db, "artifacts", __app_id, "users", uid, "profile", "data");
 
-        // --- 1. CORE LOGIC ---
+                    // Set initial profile data, including user type
+                    await firebase.setDoc(userDocRef, { 
+                        totalYield: 0, 
+                        funds: {}, 
+                        userType: selectedType, 
+                        joined: firebase.serverTimestamp() 
+                    });
+                    
+                } catch (error) {
+                    Auth.setError(error.message.replace('Firebase:', '').trim());
+                }
+            },
+            signOut: async () => {
+                await firebase.signOut(auth);
+                window.location.reload(); // Simple way to reset state
+            }
+        };
+
+        // --- 2. DATA FUNDS (INDEX FUND) LOGIC ---
+        const DataFunds = {
+            listen: () => {
+                const fundsColRef = firebase.collection(db, "artifacts", __app_id, "public", "data", "dataFunds");
+                firebase.onSnapshot(fundsColRef, (snapshot) => {
+                    WorldState.dataFunds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    DataFunds.render();
+                }, (error) => console.error("Error loading funds:", error));
+            },
+            render: () => {
+                UI.renderDataFunds();
+                UI.renderYieldPortfolio();
+            },
+            toggleFundAllocation: async (fundId, isJoining) => {
+                if (userType !== 'individual') return alert('Only individual users can allocate data to funds.');
+                
+                const files = await LocalDB.getAllFiles();
+                const financialAssets = files.filter(f => f.marketCategory === 'Financial/Tax');
+                if (financialAssets.length === 0) return alert('Deposit financial files first to join this fund.');
+
+                const userDocRef = firebase.doc(db, "artifacts", __app_id, "users", userId, "profile", "data");
+                
+                if (isJoining) {
+                    // Check if already allocated
+                    if (userProfile.funds && userProfile.funds[fundId]) {
+                        alert(`Already allocated to ${fundId}.`);
+                        return;
+                    }
+
+                    // Simulate allocation: 100% of the user's financial assets go to this fund.
+                    await firebase.updateDoc(userDocRef, {
+                        [`funds.${fundId}`]: {
+                            allocationTime: firebase.serverTimestamp(),
+                            assetCount: financialAssets.length
+                        }
+                    });
+                    alert(`Successfully allocated ${financialAssets.length} assets to ${fundId}!`);
+                } else {
+                    // Simulate deallocation
+                    let newFunds = { ...userProfile.funds };
+                    delete newFunds[fundId];
+                    await firebase.setDoc(userDocRef, { funds: newFunds }, { merge: true });
+                    alert(`Deallocated from ${fundId}.`);
+                }
+                UI.renderYieldPortfolio();
+            },
+            // Step 5: Simulate B2B Usage and Yield Payout
+            simulatePayout: async () => {
+                if (userType !== 'company') return alert('Only Company users can trigger a B2B usage/payout event.');
+
+                const yieldPayouts = {}; // {userId: amount}
+
+                // 1. Company simulates B2B purchase of SDA bundle from a fund
+                const B2B_SDA_BUNDLE_PRICE = 50000; 
+                const commission = B2B_SDA_BUNDLE_PRICE * COMMISSION_RATE;
+                const payoutPool = B2B_SDA_BUNDLE_PRICE - commission; // $42,500 payout pool
+
+                // 2. Distribute payout proportionally to ALL users contributing to ALL funds
+                const allUsersSnapshot = await firebase.getDocs(firebase.collection(db, "artifacts", __app_id, "users"));
+                let totalAssetCount = 0;
+                let userAssetMap = {};
+
+                for (const docSnap of allUsersSnapshot.docs) {
+                    const profile = docSnap.data();
+                    if (profile.userType === 'individual' && profile.funds) {
+                        let userAssets = 0;
+                        for (const fundId in profile.funds) {
+                            userAssets += profile.funds[fundId].assetCount;
+                        }
+                        if (userAssets > 0) {
+                             userAssetMap[docSnap.id] = userAssets;
+                             totalAssetCount += userAssets;
+                        }
+                    }
+                }
+
+                if (totalAssetCount === 0) return alert('No users currently contributing assets.');
+
+                // 3. Calculate yield per user based on asset contribution
+                for (const uid in userAssetMap) {
+                    const share = userAssetMap[uid] / totalAssetCount;
+                    yieldPayouts[uid] = payoutPool * share;
+                }
+                
+                // 4. Update all user profiles with new yield
+                const updatePromises = [];
+                for (const uid in yieldPayouts) {
+                    const userRef = firebase.doc(db, "artifacts", __app_id, "users", uid, "profile", "data");
+                    updatePromises.push(firebase.updateDoc(userRef, {
+                        totalYield: firebase.arrayUnion({
+                            amount: yieldPayouts[uid],
+                            date: firebase.serverTimestamp(),
+                            source: 'SDA B2B Bundle Sale'
+                        })
+                    }));
+                }
+
+                // 5. Log transaction in the company's ledger
+                const companyLedgerRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
+                await firebase.addDoc(companyLedgerRef, {
+                    action: "B2B SDA Bundle Purchase",
+                    details: `Paid \$${B2B_SDA_BUNDLE_PRICE.toFixed(2)} to use derivative assets. WorldOS commission: \$${commission.toFixed(2)}.`,
+                    timestamp: firebase.serverTimestamp(),
+                    type: 'COMPANY_EXPENSE'
+                });
+
+                await Promise.all(updatePromises);
+                alert(`SUCCESS: Simulated B2B Purchase and distributed \$${payoutPool.toFixed(2)} yield across ${Object.keys(yieldPayouts).length} users!`);
+            }
+        };
+
+        // --- 3. CRYPTO & VAULT LOGIC (Simplified) ---
         const CryptoCore = {
             async sha256(message) {
                 const msgBuffer = new TextEncoder().encode(message);
@@ -311,291 +549,252 @@
                 return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
             }
         };
-
-        const Router = {
-            nav: (viewId, element) => {
-                document.querySelectorAll('.view-section').forEach(el => {
-                    el.classList.add('hidden');
-                    el.classList.remove('fade-in');
-                });
-                
-                const targetView = document.getElementById('view-' + viewId);
-                targetView.classList.remove('hidden');
-                targetView.classList.add('fade-in');
-
-                document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-                if (element) element.classList.add('active');
-                
-                document.getElementById('breadcrumb').innerText = `SYSTEM // ${viewId.toUpperCase()}`;
-
-                // Force rendering for new views
-                if (viewId === 'vault') UI.renderVault();
-                if (viewId === 'ledger') UI.renderLedger();
-                if (viewId === 'marketplace') Marketplace.render();
-            }
-        };
-
-        // --- 2. DATA VAULT & LEDGER ---
+        
         const Vault = {
             ingest: async (input) => {
+                if (!userId || userType !== 'individual') return alert('Please sign in as an Individual Data Sovereign to deposit files.');
                 const file = input.files[0];
                 if (!file) return;
 
                 const text = await file.text();
-                const hash = await CryptoCore.sha256(text + Date.now());
                 const fileId = crypto.randomUUID();
 
-                const fileObj = {
+                // 1. Generate PoD Hash
+                const podHash = await CryptoCore.sha256(text + Date.now()); 
+                const category = Vault.categorize(file.name, text);
+                
+                const fileMetadata = {
                     id: fileId,
                     name: file.name,
                     size: file.size,
                     sizeKB: (file.size / 1024).toFixed(2),
-                    type: file.type || 'text/plain',
-                    content: text, 
-                    hash: hash,
-                    timestamp: new Date().toISOString(),
-                    marketListed: false,
-                    marketCategory: Vault.categorize(file.name)
+                    marketCategory: category,
+                    pouScore: category === 'Financial/Tax' ? Math.floor(Math.random() * 20 + 70) : 10,
+                    isAllocated: false,
+                    podHash: podHash,
+                    ownerId: userId,
+                    timestamp: firebase.serverTimestamp()
                 };
 
-                const ledgerBlock = {
-                    hash: hash,
-                    prevHash: await Vault.getLatestLedgerHash(),
-                    timestamp: fileObj.timestamp,
-                    action: `DEPOSIT: ${file.name}`,
-                    fileId: fileId
-                };
-
-                await DB.put('files', fileObj);
-                await DB.put('ledger', ledgerBlock);
+                // 2. Save RAW content locally (IndexedDB - Sovereignty)
+                await LocalDB.putFile({ id: fileId, content: text });
                 
-                UI.updateAllStats();
-                UI.renderVault();
+                // 3. Save METADATA to Firestore (Sync/Multi-user visibility)
+                const metadataColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "fileMetadata");
+                await firebase.addDoc(metadataColRef, fileMetadata);
                 
-                alert(`SECURE DEPOSIT COMPLETE\nFile: ${file.name}\nProof: ${hash.substring(0,16)}...`);
-                input.value = '';
-                Router.nav('vault', document.querySelector('#nav-vault'));
-            },
-            getLatestLedgerHash: async () => {
-                const allLedger = await DB.getAll('ledger');
-                if (allLedger.length === 0) return '0000000000000000';
-                return allLedger[allLedger.length - 1].hash;
-            },
-            categorize: (filename) => {
-                if (filename.toLowerCase().includes('health') || filename.toLowerCase().includes('medical')) return 'Health/Wellness';
-                if (filename.toLowerCase().includes('bank') || filename.toLowerCase().includes('finance')) return 'Finance/Spending';
-                if (filename.toLowerCase().includes('social') || filename.toLowerCase().includes('photo')) return 'Social/Activity';
-                return 'General/Other';
-            }
-        };
-        
-        // --- 3. DATA MARKETPLACE (PPDM) LOGIC ---
-        const Marketplace = {
-            toggleListing: async (fileId) => {
-                const files = await DB.getAll('files');
-                const file = files.find(f => f.id === fileId);
-                if (!file) return;
-
-                file.marketListed = !file.marketListed;
-
-                if (file.marketListed) {
-                    const asset = {
-                        id: fileId,
-                        category: file.marketCategory,
-                        sizeKB: parseFloat(file.sizeKB),
-                        initialValue: Marketplace.simulatePrice(file.marketCategory, file.sizeKB),
-                        isSold: false,
-                        fileHash: file.hash
-                    };
-                    await DB.put('market', asset);
-                    UI.log(`Asset **${file.name}** listed on the Data Market. Initial Price: **\$${asset.initialValue.toFixed(2)}**.`);
-                } else {
-                    const store = DB.getStore('market', 'readwrite');
-                    store.delete(fileId);
-                    UI.log(`Asset **${file.name}** removed from market listing.`);
-                }
-
-                await DB.put('files', file);
-                UI.updateAllStats();
-                Marketplace.render();
-                UI.renderVault();
-            },
-            simulatePrice: (category, sizeKB) => {
-                let base = 0;
-                switch (category) {
-                    case 'Health/Wellness': base = 0.05; break; // Highest value
-                    case 'Finance/Spending': base = 0.03; break;
-                    case 'Social/Activity': base = 0.01; break;
-                    default: base = 0.005;
-                }
-                // Price = Base value per KB * (size + random volatility)
-                return (base * parseFloat(sizeKB)) * (1 + (Math.random() * 0.5 - 0.25));
-            },
-            sellAsset: async (fileId) => {
-                const marketAssets = await DB.getAll('market');
-                const marketAsset = marketAssets.find(a => a.id === fileId);
-                if (!marketAsset || marketAsset.isSold) return;
-
-                const finalPrice = Marketplace.simulatePrice(marketAsset.category, marketAsset.sizeKB);
-                
-                // --- CRITICAL STEP: SIMULATE TRANSACTION & ANONYMIZATION ---
-                // PoD for the transaction
-                
-                const ledgerBlock = {
-                    hash: await CryptoCore.sha256(marketAsset.fileHash + Date.now()), 
-                    prevHash: await Vault.getLatestLedgerHash(),
-                    timestamp: new Date().toISOString(),
-                    action: `SALE: ${marketAsset.category} Data`,
-                    details: `Sold for \$${finalPrice.toFixed(2)}`
-                };
-
-                await DB.put('ledger', ledgerBlock);
-                marketAsset.isSold = true;
-                await DB.put('market', marketAsset);
-
-                UI.log(`**SUCCESS:** Sold **${marketAsset.category}** data for **\$${finalPrice.toFixed(2)}**. Funds deposited.`);
-                UI.updateAllStats();
-                Marketplace.render();
-            },
-            render: async () => {
-                const tbody = document.getElementById('market-list');
-                const marketAssets = await DB.getAll('market');
-                const listedAssets = marketAssets.filter(a => !a.isSold);
-                
-                tbody.innerHTML = '';
-                
-                if (listedAssets.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-secondary">No data assets listed. Deposit files and list them in the Vault view.</td></tr>';
-                }
-
-                let totalPortfolioValue = 0;
-
-                listedAssets.forEach(asset => {
-                    const currentPrice = Marketplace.simulatePrice(asset.category, asset.sizeKB);
-                    totalPortfolioValue += currentPrice;
-
-                    const tr = document.createElement('tr');
-                    tr.className = 'hover:bg-zinc-900/50 transition-colors';
-                    tr.innerHTML = `
-                        <td class="px-6 py-4 text-white font-medium">${asset.category}</td>
-                        <td class="px-6 py-4 text-secondary font-code">${asset.sizeKB} KB</td>
-                        <td class="px-6 py-4 text-indicator-warn font-code">\ $${currentPrice.toFixed(2)}</td>
-                        <td class="px-6 py-4">
-                            <button onclick="Marketplace.sellAsset('${asset.id}')" class="bg-indicator-ok text-black px-3 py-1 rounded text-xs font-semibold hover:bg-emerald-400 transition-colors">
-                                SELL NOW
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
+                // 4. Log PoD in Ledger (Firestore)
+                const ledgerColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
+                await firebase.addDoc(ledgerColRef, {
+                    hash: podHash,
+                    action: `DEPOSIT: ${file.name} (${category})`,
+                    type: 'POD',
+                    timestamp: firebase.serverTimestamp()
                 });
-
-                document.getElementById('market-portfolio').innerText = `\$${totalPortfolioValue.toFixed(2)}`;
-                document.getElementById('dash-market-val').innerText = `\$${totalPortfolioValue.toFixed(2)}`;
-            }
+                
+                alert(`SECURE DEPOSIT COMPLETE: File Metadata Synced. Raw File is Local.`);
+                input.value = '';
+                UI.renderVault();
+            },
+            categorize: (filename, content) => {
+                const lowFilename = filename.toLowerCase();
+                const lowContent = content.toLowerCase();
+                // Focusing categorization on high-value financial data
+                if (lowFilename.includes('bank') || lowFilename.includes('tax') || lowContent.includes('chase') || lowContent.includes('amex')) return 'Financial/Tax';
+                if (lowFilename.includes('mobility') || lowFilename.includes('ev') || lowContent.includes('tesla')) return 'Urban/Mobility';
+                if (lowFilename.includes('shopping') || lowContent.includes('amazon')) return 'Retail/E-commerce';
+                return 'General/Other';
+            },
         };
 
         // --- 4. UI & RENDERING ---
         const UI = {
-            updateAllStats: async () => {
-                const files = await DB.getAll('files');
-                const ledger = await DB.getAll('ledger');
-                
-                const totalSize = files.reduce((acc, f) => acc + f.size, 0);
-                const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
-                
-                document.getElementById('deposit-count').innerText = files.length;
-                document.getElementById('dash-ledger').innerText = ledger.length;
-                document.getElementById('storage-usage').innerText = `${totalSizeMB} MB`;
-                document.getElementById('dash-usage-val').innerText = `${totalSizeMB} MB`;
-                
-                UI.renderChart(ledger);
+            enableApp: () => {
+                document.querySelectorAll('.view-section').forEach(el => el.style.pointerEvents = 'auto');
+                document.getElementById('user-display').innerText = `User: ${auth.currentUser.email || auth.currentUser.uid.substring(0, 8)} | Type: ${userType}`;
+            },
+            disableApp: () => {
+                document.querySelectorAll('.view-section').forEach(el => el.style.pointerEvents = 'none');
+            },
+            updateHeader: () => {
+                const totalYield = (userProfile.totalYield || []).reduce((sum, item) => sum + item.amount, 0);
+                document.getElementById('dash-yield').innerText = `\$${totalYield.toFixed(2)}`;
+                document.getElementById('dash-funds-count').innerText = Object.keys(userProfile.funds || {}).length;
+                document.getElementById('current-user-type').innerText = userType === 'company' ? 'Enterprise' : 'Individual';
             },
             renderVault: async () => {
                 const tbody = document.getElementById('vault-list');
                 tbody.innerHTML = ''; 
 
-                const files = await DB.getAll('files');
-                
+                const files = await LocalDB.getAllFiles(); // Get local data for PoU score
+
                 if (files.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-secondary">Vault is empty. Deposit files to initialize local encryption.</td></tr>';
                     return;
                 }
 
                 files.forEach(file => {
-                    const marketBtn = file.marketListed 
-                        ? `<button onclick="Marketplace.toggleListing('${file.id}')" class="bg-red-500 text-white px-2 py-1 rounded text-[10px] font-semibold">LISTED (REMOVE)</button>`
-                        : `<button onclick="Marketplace.toggleListing('${file.id}')" class="bg-blue-500 text-white px-2 py-1 rounded text-[10px] font-semibold">LIST</button>`;
-
+                    const isAllocated = Object.keys(userProfile.funds || {}).length > 0 && file.marketCategory === 'Financial/Tax';
+                    
                     const tr = document.createElement('tr');
                     tr.className = 'hover:bg-zinc-900/50 transition-colors';
                     tr.innerHTML = `
                         <td class="px-6 py-4 text-white font-medium">${file.name}</td>
-                        <td class="px-6 py-4 text-secondary font-code text-xs">${file.sizeKB} KB</td>
-                        <td class="px-6 py-4 text-indicator-ok font-code text-xs">AES-256-GCM</td>
-                        <td class="px-6 py-4 flex items-center gap-2">
-                            <span class="bg-zinc-800 text-zinc-300 px-2 py-1 rounded text-[10px] border border-zinc-700 font-code">${file.marketCategory}</span>
-                            ${marketBtn}
+                        <td class="px-6 py-4 text-secondary font-code text-xs">${file.marketCategory}</td>
+                        <td class="px-6 py-4 ${file.pouScore > 50 ? 'text-indicator-ok' : 'text-red-400'} font-code text-xs">${file.pouScore}%</td>
+                        <td class="px-6 py-4">
+                            <span class="${isAllocated ? 'bg-indicator-ok' : 'bg-gray-500'} text-black px-2 py-1 rounded text-[10px] font-semibold">
+                                ${isAllocated ? 'ALLOCATED' : 'FREE'}
+                            </span>
                         </td>
                     `;
                     tbody.prepend(tr);
                 });
                 feather.replace();
             },
-            renderLedger: async () => {
+            renderLedger: () => {
+                if (!userId) return;
                 const container = document.getElementById('ledger-list');
+                container.innerHTML = '<div class="text-center text-secondary p-5">Loading Ledger...</div>';
+                
+                const ledgerColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
+                const q = firebase.query(ledgerColRef, firebase.orderBy("timestamp", "desc"));
+
+                firebase.onSnapshot(q, (snapshot) => {
+                    container.innerHTML = '';
+                    if (snapshot.empty) {
+                        container.innerHTML = '<div class="text-center text-secondary p-5">Ledger is empty.</div>';
+                        return;
+                    }
+                    snapshot.docs.forEach(docSnap => {
+                        const block = docSnap.data();
+                        const div = document.createElement('div');
+                        const isYield = block.type === 'YIELD' || block.action.startsWith('SALE');
+                        const isDeposit = block.type === 'POD' || block.action.startsWith('DEPOSIT');
+                        
+                        div.className = "ledger-entry p-4 rounded font-code text-xs space-y-2 fade-in";
+                        div.innerHTML = `
+                            <div class="flex justify-between text-zinc-500">
+                                <span>TYPE: ${block.type || 'TX'}</span>
+                                <span>${block.timestamp ? new Date(block.timestamp.toDate()).toLocaleString() : 'Pending...'}</span>
+                            </div>
+                            <div class="${isYield ? 'text-indicator-ok' : isDeposit ? 'text-accent' : 'text-primary'} truncate">
+                                ACTION: ${block.action} ${block.details ? `— ${block.details}` : ''}
+                            </div>
+                        `;
+                        container.appendChild(div);
+                    });
+                });
+            },
+            renderDataFunds: () => {
+                const container = document.getElementById('data-funds-list');
                 container.innerHTML = '';
 
-                const ledger = await DB.getAll('ledger');
+                // Simulate default index funds if none exist in Firestore
+                if (WorldState.dataFunds.length === 0) {
+                    WorldState.dataFunds = [
+                        { id: 'FinancialTaxFund', name: 'Normalized Tax & Finance Fund', category: 'Financial/Tax', requiredPoU: 70, currentYield: 12.5, description: 'High-value fund for global CPA and wealth management analytics.' },
+                        { id: 'UrbanEVFund', name: 'Urban EV Adopters Fund', category: 'Urban/Mobility', requiredPoU: 30, currentYield: 4.8, description: 'Mobility patterns for urban planning and automotive industry analysis.' },
+                        { id: 'RetailPulseFund', name: 'Premium Retail Pulse Fund', category: 'Retail/E-commerce', requiredPoU: 50, currentYield: 7.1, description: 'Verified purchase intent data for consumer brands and market sizing.' }
+                    ];
+                    // Optional: Push simulated funds to Firestore for persistence
+                }
+                
+                WorldState.dataFunds.forEach(fund => {
+                    const isAllocated = userProfile.funds && userProfile.funds[fund.id];
+                    const buttonText = isAllocated ? 'DE-ALLOCATE' : 'ALLOCATE ASSETS';
+                    const buttonColor = isAllocated ? 'bg-red-500 hover:bg-red-600' : 'bg-accent hover:bg-opacity-80';
 
-                if (ledger.length === 0) {
-                    container.innerHTML = '<div class="text-center text-secondary p-5">Ledger is empty.</div>';
+                    const card = document.createElement('div');
+                    card.className = "bg-surface border border-theme p-5 rounded-lg flex flex-col justify-between";
+                    card.innerHTML = `
+                        <div>
+                            <h4 class="text-xl font-semibold text-accent">${fund.name}</h4>
+                            <p class="text-xs text-secondary mb-2">${fund.category}</p>
+                            <p class="text-3xl font-code text-indicator-ok my-3">${fund.currentYield}% <span class="text-base text-secondary">Yield Target</span></p>
+                            <p class="text-sm text-secondary">${fund.description}</p>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-zinc-700 flex justify-between items-center">
+                            <span class="text-xs text-secondary">Min PoU: ${fund.requiredPoU}%</span>
+                            <button onclick="DataFunds.toggleFundAllocation('${fund.id}', ${!isAllocated})"
+                                class="text-sm text-white px-3 py-1 rounded font-medium transition-colors ${buttonColor}"
+                                ${userType !== 'individual' ? 'disabled' : ''}>
+                                ${userType === 'individual' ? buttonText : 'B2B ACCESS'}
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            },
+            renderYieldPortfolio: () => {
+                const tbody = document.getElementById('yield-portfolio-list');
+                tbody.innerHTML = '';
+                
+                const activeFunds = userProfile.funds || {};
+                const fundIds = Object.keys(activeFunds);
+                
+                if (fundIds.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-secondary">You are not currently allocated to any fund.</td></tr>';
                     return;
                 }
                 
-                [...ledger].reverse().forEach((block, index) => {
-                    const div = document.createElement('div');
-                    div.className = "ledger-entry p-4 rounded font-code text-xs space-y-2 fade-in";
-                    div.innerHTML = `
-                        <div class="flex justify-between text-zinc-500">
-                            <span>BLOCK: ${ledger.length - index}</span>
-                            <span>${new Date(block.timestamp).toLocaleTimeString()} ${new Date(block.timestamp).toLocaleDateString()}</span>
-                        </div>
-                        <div class="text-primary truncate">ACTION: ${block.action} ${block.details ? `(${block.details})` : ''}</div>
-                        <div class="text-indicator-ok truncate">HASH: ${block.hash.substring(0, 50)}...</div>
-                        <div class="text-zinc-600 truncate">PREV: ${block.prevHash.substring(0, 50)}...</div>
+                let totalYieldValue = 0;
+                
+                fundIds.forEach(fundId => {
+                    const fund = WorldState.dataFunds.find(f => f.id === fundId);
+                    const userData = activeFunds[fundId];
+                    if (!fund) return;
+                    
+                    // Simulate payout: last recorded yield + a small random amount
+                    const lastPayout = (Math.random() * 50 + 10).toFixed(2);
+                    totalYieldValue += parseFloat(lastPayout);
+
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-zinc-900/50 transition-colors';
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 text-white font-medium">${fund.name}</td>
+                        <td class="px-6 py-4 text-secondary font-code">${userData.assetCount} Assets</td>
+                        <td class="px-6 py-4 text-indicator-warn font-code">\ $${lastPayout}</td>
+                        <td class="px-6 py-4">
+                            <button onclick="DataFunds.toggleFundAllocation('${fundId}', false)" class="bg-red-500 text-white px-3 py-1 rounded text-xs font-semibold">
+                                De-Allocate
+                            </button>
+                        </td>
                     `;
-                    container.appendChild(div);
+                    tbody.appendChild(tr);
                 });
+
+                // Update Dashboard Metrics
+                const lifetimeYield = (userProfile.totalYield || []).reduce((sum, item) => sum + item.amount, 0);
+                document.getElementById('dash-yield').innerText = `\$${(lifetimeYield + totalYieldValue).toFixed(2)}`;
+                document.getElementById('dash-funds-count').innerText = fundIds.length;
             },
+            
+            // Step 5: Chart rendering (PoU tracking)
             renderChart: (ledgerData) => {
                 const ctx = document.getElementById('vaultChart').getContext('2d');
                 
-                const depositDates = ledgerData
-                    .filter(b => b.action.startsWith('DEPOSIT'))
-                    .map(b => new Date(b.timestamp).toLocaleDateString());
+                const pouDates = ledgerData
+                    .filter(b => b.action.startsWith('POU'))
+                    .map(b => (b.timestamp ? new Date(b.timestamp.toDate()).toLocaleDateString() : 'Pending'));
 
-                const counts = depositDates.reduce((acc, date) => {
-                    acc[date] = (acc[date] || 0) + 1;
-                    return acc;
-                }, {});
+                const counts = pouDates.reduce((acc, date) => { acc[date] = (acc[date] || 0) + 1; return acc; }, {});
 
                 let cumulative = 0;
                 const labels = Object.keys(counts).sort();
                 const data = labels.map(date => cumulative += counts[date]);
 
-                if (window.vaultChartInstance) {
-                    window.vaultChartInstance.destroy();
-                }
+                if (window.vaultChartInstance) window.vaultChartInstance.destroy();
 
                 window.vaultChartInstance = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: 'Cumulative Deposits',
+                            label: 'Cumulative PoU Blocks',
                             data: data,
-                            borderColor: '#22c55e', 
-                            backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                            borderColor: 'var(--accent)', 
+                            backgroundColor: 'rgba(6, 182, 212, 0.2)',
                             tension: 0.3,
                             fill: true,
                         }]
@@ -605,19 +804,17 @@
                         maintainAspectRatio: false,
                         plugins: { legend: { display: false } },
                         scales: {
-                            y: { beginAtZero: true, grid: { color: 'rgba(39, 39, 42, 0.5)' }, ticks: { color: '#a1a1aa' } },
-                            x: { grid: { display: false }, ticks: { color: '#a1a1aa' } }
+                            y: { beginAtZero: true, grid: { color: 'rgba(71, 85, 105, 0.5)' }, ticks: { color: 'var(--text-sec)' } },
+                            x: { grid: { display: false }, ticks: { color: 'var(--text-sec)' } }
                         }
                     }
                 });
-            },
-            log: (msg) => {
-                console.log(`[LOG] ${msg}`);
             }
         };
 
         const AI = {
-            send: async () => {
+             send: async () => {
+                if (userType !== 'individual') return alert('Only individual users can generate Proof of Utility blocks.');
                 const input = document.getElementById('ai-input');
                 const query = input.value.trim().toLowerCase();
                 if(!query) return;
@@ -628,21 +825,26 @@
                 AI.appendChat('ai', 'Thinking...', true);
                 
                 setTimeout(async () => {
-                    const files = await DB.getAll('files');
+                    const files = await LocalDB.getAllFiles();
                     const hits = files.filter(f => f.content.toLowerCase().includes(query) || f.name.toLowerCase().includes(query));
                     
                     let response = "";
                     const lastMsg = document.querySelector('.loading-msg');
                     
                     if (hits.length > 0) {
-                        response = `I found **${hits.length}** relevant document(s) in your **Local Vault**:\n\n`;
-                        hits.forEach(h => {
-                            response += `> **${h.name}**: "${h.content.substring(0, Math.min(h.content.length, 100))}..."\n`;
+                        // Proof of Utility Generation
+                        const ledgerColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
+                        await firebase.addDoc(ledgerColRef, { 
+                            action: `POU: Normalized ${query.substring(0, 30)}...`,
+                            type: 'POU',
+                            timestamp: firebase.serverTimestamp()
                         });
-                        response += `\nAnalysis complete. **Data never left this device.**`;
+
+                        response = `RAG Inference Complete. Analyzed **${hits.length}** financial assets.\n\n`;
+                        response += `**Proof of Utility (PoU) Block Generated:** This proves data normalization and verification. This increases the value of your Data Fund allocation.\n\n`;
+                        response += `> Check the Ledger for verification.`;
                     } else {
-                        if(query.includes('market') || query.includes('sell')) response = "I see your query about the Data Market. Remember, you control the **Marketplace** listing in the Vault tab. I can monitor prices, but only *you* can authorize the final sale.";
-                        else response = "I searched your local vault and did not find a direct contextual match. Upload files to expand your local knowledge base.";
+                        response = "I searched your local vault but found no financial assets matching that query. Upload files or adjust your query.";
                     }
 
                     if (lastMsg) lastMsg.remove();
@@ -682,13 +884,16 @@
 
         // --- INITIALIZATION ---
         window.onload = async () => {
-            await DB.init();
-            await UI.updateAllStats();
+            feather.replace();
+            await LocalDB.init();
+            await FirebaseInit.setup();
             Router.nav('dashboard', document.querySelector('.nav-item.active'));
 
-            // Set up Enter key listener
             document.getElementById('ai-input').addEventListener('keypress', function (e) {
                 if (e.key === 'Enter') AI.send();
+            });
+            document.getElementById('auth-password').addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') Auth.signIn();
             });
         };
     </script>
