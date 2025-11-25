@@ -10,6 +10,7 @@
     
     <script src="https://unpkg.com/feather-icons"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
         /* --- WORLD SKIN: DEFAULT (ZINC) --- */
@@ -32,87 +33,29 @@
             --font-ui: 'Inter', sans-serif;
             --font-code: 'JetBrains Mono', monospace;
         }
-
-        /* --- THEME: AMBER (CYBERPUNK) --- */
-        [data-skin="amber"] {
-            --bg-os: #0c0a00;
-            --bg-panel: #141100;
-            --bg-surface: #1f1a00;
-            --border: #332b00;
-            --text-pri: #ffcc00;
-            --text-sec: #997a00;
-            --text-mono: #ffcc00;
-            --accent: #ffcc00;
-            --accent-inv: #0c0a00;
-            --indicator-ok: #ffcc00;
-        }
-
-        /* --- THEME: SLATE (CLEAN) --- */
-        [data-skin="slate"] {
-            --bg-os: #0f172a; /* slate-900 */
-            --bg-panel: #1e293b; /* slate-800 */
-            --bg-surface: #334155; /* slate-700 */
-            --border: #475569; /* slate-600 */
-            --text-pri: #f8fafc; /* slate-50 */
-            --text-sec: #94a3b8; /* slate-400 */
-            --accent: #38bdf8; /* sky-400 */
-            --accent-inv: #0f172a;
-        }
-
-        /* --- CORE OS RESET & LAYOUT --- */
-        * { box-sizing: border-box; outline: none; user-select: none; }
-        body { 
-            margin: 0; 
-            background: var(--bg-os); 
-            color: var(--text-pri); 
-            font-family: var(--font-ui); 
-            height: 100vh; 
-            overflow: hidden; 
-            display: flex; 
-            transition: background 0.3s ease; 
-        }
-        input, textarea { user-select: text; }
-
-        /* Custom utility classes based on theme vars */
+        /* Tailwind and custom CSS classes based on theme vars */
         .bg-os { background-color: var(--bg-os); }
         .bg-panel { background-color: var(--bg-panel); }
         .bg-surface { background-color: var(--bg-surface); }
         .border-theme { border-color: var(--border); }
         .text-primary { color: var(--text-pri); }
         .text-secondary { color: var(--text-sec); }
-        .text-mono { color: var(--text-mono); }
-        .text-accent { color: var(--accent); }
-        .bg-accent { background-color: var(--accent); color: var(--accent-inv); }
         .indicator-ok { background-color: var(--indicator-ok); box-shadow: 0 0 10px var(--indicator-ok); }
         .font-code { font-family: var(--font-code); }
-        
-        /* Sidebar Item Styling (Combining Code 1 hover & Code 2 active) */
-        .nav-item {
-            color: var(--text-sec);
-            transition: 0.2s;
-        }
-        .nav-item:hover, .nav-item.active { 
-            background: var(--bg-surface); 
-            color: var(--text-pri); 
-        }
-
-        /* Animations */
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.1); } 70% { box-shadow: 0 0 0 6px rgba(0,0,0,0); } 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .nav-item { color: var(--text-sec); transition: 0.2s; }
+        .nav-item:hover, .nav-item.active { background: var(--bg-surface); color: var(--text-pri); }
         .fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        
-        /* Terminal / Chat specific styles */
-        .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-inv); max-width: 80%; }
-        .msg.system { align-self: flex-start; border: 1px solid var(--border); color: var(--text-sec); font-size: 0.8rem; max-width: 80%; }
-        .msg.ai { align-self: flex-start; background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-pri); max-width: 80%; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
+        /* Ledger entry style */
+        .ledger-entry { background-color: var(--bg-surface); border: 1px solid var(--border); }
     </style>
 </head>
-<body data-skin="default">
+<body class="flex">
 
     <aside class="w-60 bg-panel border-r border-theme flex flex-col z-20">
         <div class="p-6 flex items-center gap-3 select-none border-b border-theme">
-            <i data-feather="hexagon" class="text-accent"></i>
+            <i data-feather="hexagon" class="text-white"></i>
             <div>
                 <h1 class="font-bold tracking-tight text-lg leading-none font-code text-primary">WORLD<span class="opacity-50">OS</span></h1>
                 <span class="text-[10px] text-secondary font-code uppercase tracking-widest">Sovereign Node</span>
@@ -132,12 +75,12 @@
             <button onclick="Router.nav('ledger', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
                 <i data-feather="list" class="w-4 h-4"></i> Proof Ledger
             </button>
+            <button onclick="Router.nav('marketplace', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
+                <i data-feather="zap" class="w-4 h-4 text-indicator-warn"></i> Data Market
+            </button>
         </nav>
 
         <div class="p-4 border-t border-theme">
-            <button onclick="Router.nav('settings', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium mb-4">
-                <i data-feather="settings" class="w-4 h-4"></i> Config
-            </button>
             <div class="flex items-center gap-3">
                 <div class="w-3 h-3 rounded-full indicator-ok animate-pulse"></div>
                 <span class="text-xs text-secondary font-code">LOCAL RUNTIME ACTIVE</span>
@@ -154,9 +97,8 @@
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-theme">
                     <i data-feather="hard-drive" class="w-3 h-3 text-secondary"></i>
-                    <span class="text-xs font-code text-mono" id="dash-usage">0 MB</span>
+                    <span class="text-xs font-code text-primary" id="storage-usage">0 MB</span>
                 </div>
-                <div class="w-7 h-7 rounded bg-gradient-to-br from-zinc-700 to-black border border-zinc-600"></div>
             </div>
         </header>
 
@@ -170,7 +112,7 @@
                         <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Vault Usage</div>
                         <div class="text-3xl font-code text-primary" id="dash-usage-val">0 MB</div>
                         <div class="mt-2 text-xs text-indicator-ok flex items-center gap-1">
-                            <i data-feather="lock" class="w-3 h-3 text-indicator-ok"></i> Local-First / Encrypted
+                            <i data-feather="lock" class="w-3 h-3 text-indicator-ok"></i> IndexedDB Persistent
                         </div>
                     </div>
                     <div class="bg-surface border border-theme p-5 rounded-lg">
@@ -179,16 +121,19 @@
                         <div class="mt-2 text-xs text-secondary">Proof-of-Deposit Blocks</div>
                     </div>
                     <div class="bg-surface border border-theme p-5 rounded-lg">
-                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">AI Status</div>
-                        <div class="text-2xl font-medium text-primary mt-1">READY (SIM)</div>
-                        <div class="mt-2 text-xs text-secondary">No API Key Req</div>
+                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Market Portfolio Value</div>
+                        <div class="text-3xl font-code text-primary text-indicator-warn" id="dash-market-val">$0.00</div>
+                        <div class="mt-2 text-xs text-secondary">Simulated Local Valuation</div>
                     </div>
                 </div>
 
                 <div class="bg-surface border border-theme rounded-lg p-6 mb-8">
-                    <h3 class="text-lg font-medium mb-3">Recent Activity</h3>
-                    <div id="activity-log" class="font-code text-sm text-secondary space-y-1">
-                        <div><span class="opacity-50">[SYSTEM]</span> Node initialized. Waiting for input...</div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-medium">Vault Deposit Trend</h3>
+                        <span class="text-xs text-secondary font-code">LOCAL ANALYTICS</span>
+                    </div>
+                    <div class="h-48">
+                        <canvas id="vaultChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -196,83 +141,93 @@
             <div id="view-intelligence" class="view-section absolute inset-0 hidden p-8">
                 <div class="flex flex-col h-full bg-panel border border-theme rounded-lg overflow-hidden">
                     <div class="flex-1 p-5 overflow-y-auto font-code text-sm space-y-4" id="chat-history">
-                        <div class="msg system p-3 rounded-lg">
-                            WorldOS Neural Core v1.0 initialized.<br>
-                            Running in **Sovereign Mode** (Local Simulation).<br>
-                            No data leaves this device. No API keys required.
-                        </div>
-                        <div class="msg ai p-3 rounded-lg">
-                            I am your local intelligence. I have access to your Vault and Ledger. How can I assist you with your data today?
+                        <div class="flex items-start gap-4">
+                            <div class="w-8 h-8 rounded bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
+                                <i data-feather="cpu" class="w-4 h-4 text-indicator-ok"></i>
+                            </div>
+                            <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 max-w-2xl text-sm leading-relaxed text-zinc-300">
+                                <p><strong>Neural Core Online.</strong> I am running a local **Retrieval Augmented Generation (RAG)** system.</p>
+                                <p class="mt-2">I have access to the data in your IndexedDB Vault. **No external API key is required.**</p>
+                            </div>
                         </div>
                     </div>
-                    <div class="p-4 bg-surface border-t border-theme flex gap-3">
-                        <input type="text" class="flex-1 bg-transparent border border-theme rounded-md px-3 text-primary font-ui text-base" id="chat-input" placeholder="Query your world..." autocomplete="off">
-                        <button class="bg-accent text-accent-inv px-5 py-2 rounded-md font-semibold text-sm" onclick="AI.send()">EXECUTE</button>
+                    <div class="p-4 border-t border-theme bg-theme-panel">
+                        <div class="max-w-4xl mx-auto relative">
+                            <input type="text" id="ai-input" placeholder="Query your local data..." class="w-full bg-zinc-900 border border-zinc-700 rounded-md py-3 pl-4 pr-12 text-sm text-white focus:border-white transition-colors">
+                            <button onclick="AI.send()" class="absolute right-2 top-2 p-1.5 hover:bg-zinc-800 rounded text-secondary hover:text-white transition-colors">
+                                <i data-feather="arrow-up" class="w-4 h-4"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div id="view-vault" class="view-section absolute inset-0 hidden p-8 overflow-y-auto fade-in">
                 <div class="flex justify-between items-center mb-6">
-                    <h1 class="text-2xl font-medium">Data Vault 🛡️</h1>
-                    <button class="bg-accent text-accent-inv px-5 py-2 rounded-md font-semibold text-sm" onclick="document.getElementById('file-upload').click()">+ Deposit File</button>
-                    <input type="file" id="file-upload" hidden onchange="Vault.ingest(this)">
+                    <h2 class="text-2xl font-medium">Data Vault 🛡️</h2>
+                    <label class="cursor-pointer bg-white text-black hover:bg-zinc-200 px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-2">
+                        <i data-feather="plus" class="w-4 h-4"></i> Deposit File
+                        <input type="file" class="hidden" id="file-upload" onchange="Vault.ingest(this)">
+                    </label>
                 </div>
-                
-                <div class="bg-panel border border-theme rounded-lg overflow-hidden">
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="text-left bg-surface border-b border-theme text-secondary font-code uppercase text-xs">
-                                <th class="p-4">FILENAME</th>
-                                <th class="p-4">SIZE</th>
-                                <th class="p-4">ENCRYPTION</th>
-                                <th class="p-4">TYPE</th>
-                            </tr>
-                        </thead>
-                        <tbody id="vault-list">
-                            <tr><td colspan="4" class="text-center p-5 text-secondary">Vault is empty. Deposit your first file.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
 
-            <div id="view-ledger" class="view-section absolute inset-0 hidden p-8 overflow-y-auto fade-in">
-                <h1 class="text-2xl font-medium mb-2">Proof-of-Deposit Ledger ⛓️</h1>
-                <p class="text-secondary mb-6">Immutable record of all data ingress/egress. Hashed locally.</p>
-                
-                <div class="bg-panel border border-theme rounded-lg overflow-hidden">
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="text-left bg-surface border-b border-theme text-secondary font-code uppercase text-xs">
-                                <th class="p-4">TIMESTAMP</th>
-                                <th class="p-4">ACTION</th>
-                                <th class="p-4">PROOF HASH (SHA-256)</th>
+                <div class="bg-theme-surface border border-theme rounded-lg overflow-hidden">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-zinc-900 text-zinc-500 font-medium border-b border-theme">
+                            <tr>
+                                <th class="px-6 py-3">Asset Name</th>
+                                <th class="px-6 py-3">Size</th>
+                                <th class="px-6 py-3">Encryption</th>
+                                <th class="px-6 py-3">Market Status</th>
                             </tr>
                         </thead>
-                        <tbody id="ledger-list">
+                        <tbody id="vault-list" class="divide-y divide-zinc-800">
                             </tbody>
                     </table>
                 </div>
             </div>
 
-            <div id="view-settings" class="view-section absolute inset-0 hidden p-8 overflow-y-auto fade-in">
-                <h1 class="text-2xl font-medium mb-6">World Configuration ⚙️</h1>
+            <div id="view-ledger" class="view-section absolute inset-0 hidden p-8 overflow-y-auto fade-in">
+                <h2 class="text-2xl font-medium mb-6">Proof of Deposit (PoD) Ledger ⛓️</h2>
+                <div class="space-y-2" id="ledger-list">
+                    </div>
+            </div>
+
+            <div id="view-marketplace" class="view-section absolute inset-0 hidden p-8 overflow-y-auto fade-in">
+                <h2 class="text-2xl font-medium mb-2">Sovereign Data Marketplace ⚡</h2>
+                <p class="text-secondary mb-6">Maintain **sovereignty** while connecting to corporate buyers. You control **when** and **if** your data (or a computed derivative) is sold.</p>
                 
-                <div class="bg-surface border border-theme p-6 rounded-lg mb-6">
-                    <h3 class="text-lg font-medium mb-4">Design Skin</h3>
-                    <div class="flex gap-3">
-                        <button class="bg-panel border border-theme text-primary px-4 py-2 rounded-md hover:border-primary transition-colors text-sm" onclick="UI.setSkin('default')">Zinc (Default)</button>
-                        <button class="bg-panel border border-theme text-primary px-4 py-2 rounded-md hover:border-primary transition-colors text-sm" onclick="UI.setSkin('amber')">Amber (Cyber)</button>
-                        <button class="bg-panel border border-theme text-primary px-4 py-2 rounded-md hover:border-primary transition-colors text-sm" onclick="UI.setSkin('slate')">Slate (Blue)</button>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-surface border border-theme p-5 rounded-lg">
+                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Portfolio Value</div>
+                        <div class="text-4xl font-code text-indicator-warn" id="market-portfolio">$0.00</div>
+                        <div class="mt-2 text-xs text-secondary">Total potential earnings from listed data assets.</div>
+                    </div>
+                    <div class="bg-surface border border-theme p-5 rounded-lg">
+                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Global Demand Index</div>
+                        <div class="text-4xl font-code text-primary" id="market-demand-index">7.8 / 10</div>
+                        <div class="mt-2 text-xs text-indicator-ok">High demand for **Health/Wellness** and **Finance** data.</div>
                     </div>
                 </div>
 
-                <div class="bg-surface border border-theme p-6 rounded-lg">
-                    <h3 class="text-lg font-medium mb-2">Portable World</h3>
-                    <p class="text-secondary text-sm mb-4">Export your entire state (Vault + Ledger + Vectors) to a single encrypted file.</p>
-                    <button class="bg-accent text-accent-inv px-5 py-2 rounded-md font-semibold text-sm" onclick="System.exportWorld()">Download .worldpack</button>
+                <div class="bg-panel border border-theme rounded-lg overflow-hidden">
+                    <div class="px-6 py-4 bg-zinc-900 border-b border-theme text-primary font-medium">Your Data Assets for Sale</div>
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-zinc-900/50 text-zinc-500 font-medium border-b border-theme">
+                            <tr>
+                                <th class="px-6 py-3">Data Category</th>
+                                <th class="px-6 py-3">Data Count</th>
+                                <th class="px-6 py-3">Market Price (Sim)</th>
+                                <th class="px-6 py-3">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="market-list" class="divide-y divide-zinc-800">
+                            <tr><td colspan="4" class="px-6 py-4 text-center text-secondary">No data assets listed. Deposit files and list them in the Vault view.</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
+            
         </div>
     </div>
 
@@ -280,231 +235,460 @@
         feather.replace();
 
         // --- CORE SYSTEM STATE ---
-        const State = {
-            vault: [],
-            ledger: [],
-            skin: 'default',
+        let WorldState = {
+            db: null,
+            marketAssets: [], // Stored in IndexedDB, loaded on init
+        };
+        const DB_NAME = 'WorldOS_SovereignNode';
+        const DB_VERSION = 1;
+
+        // --- 0. DATA PERSISTENCE (INDEXEDDB) ---
+        const DB = {
+            init: () => {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, DB_VERSION);
+                    
+                    request.onupgradeneeded = (e) => {
+                        WorldState.db = e.target.result;
+                        // Create object stores (like tables in SQL)
+                        WorldState.db.createObjectStore('files', { keyPath: 'id' });
+                        WorldState.db.createObjectStore('ledger', { keyPath: 'hash' });
+                        WorldState.db.createObjectStore('market', { keyPath: 'id' });
+                    };
+
+                    request.onsuccess = (e) => {
+                        WorldState.db = e.target.result;
+                        console.log("IndexedDB Initialized successfully.");
+                        resolve();
+                    };
+
+                    request.onerror = (e) => {
+                        console.error("IndexedDB Error:", e.target.error);
+                        reject(e.target.error);
+                    };
+                });
+            },
+            getStore: (storeName, mode) => {
+                const tx = WorldState.db.transaction(storeName, mode);
+                return tx.objectStore(storeName);
+            },
+            getAll: (storeName) => {
+                return new Promise((resolve, reject) => {
+                    const store = DB.getStore(storeName, 'readonly');
+                    const request = store.getAll();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            },
+            put: (storeName, data) => {
+                return new Promise((resolve, reject) => {
+                    const store = DB.getStore(storeName, 'readwrite');
+                    const request = store.put(data);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
         };
 
-        // --- CRYPTO MODULE (REAL HASHING) ---
+
+        // --- 1. CORE LOGIC ---
         const CryptoCore = {
             async sha256(message) {
-                // Ensure message is a string for TextEncoder
-                const msgString = typeof message === 'string' ? message : JSON.stringify(message);
-                const msgBuffer = new TextEncoder().encode(msgString);
+                const msgBuffer = new TextEncoder().encode(message);
                 const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
                 const hashArray = Array.from(new Uint8Array(hashBuffer));
                 return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
             }
         };
 
-        // --- ROUTER ---
         const Router = {
             nav: (viewId, element) => {
                 document.querySelectorAll('.view-section').forEach(el => {
-                    el.classList.remove('active');
                     el.classList.add('hidden');
+                    el.classList.remove('fade-in');
                 });
                 
                 const targetView = document.getElementById('view-' + viewId);
                 targetView.classList.remove('hidden');
-                targetView.classList.add('active', 'fade-in');
+                targetView.classList.add('fade-in');
 
                 document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-                if (element) {
-                    element.classList.add('active');
-                } else {
-                    // Fallback to finding the correct nav item
-                    document.getElementById(`nav-${viewId}`)?.classList.add('active');
-                }
+                if (element) element.classList.add('active');
                 
-                document.getElementById('breadcrumb').innerText = `/${viewId}`;
+                document.getElementById('breadcrumb').innerText = `SYSTEM // ${viewId.toUpperCase()}`;
+
+                // Force rendering for new views
+                if (viewId === 'vault') UI.renderVault();
+                if (viewId === 'ledger') UI.renderLedger();
+                if (viewId === 'marketplace') Marketplace.render();
             }
         };
 
-        // --- UI CONTROLLER ---
-        const UI = {
-            setSkin: (skinName) => {
-                document.body.setAttribute('data-skin', skinName);
-                State.skin = skinName;
-                UI.log(`System skin changed to: ${skinName}`);
-            },
-            log: (msg) => {
-                const logEl = document.getElementById('activity-log');
-                const time = new Date().toLocaleTimeString([], {hour12:false});
-                const newLog = document.createElement('div');
-                newLog.innerHTML = `<span class="opacity-50">[${time}]</span> ${msg}`;
-                
-                // Prepend new log item
-                if (logEl.firstChild) {
-                    logEl.insertBefore(newLog, logEl.firstChild);
-                } else {
-                    logEl.appendChild(newLog);
-                }
-            },
-            renderVault: () => {
-                const tbody = document.getElementById('vault-list');
-                const totalSize = State.vault.reduce((a,b)=>a+b.size,0);
-                const totalSizeKB = (totalSize/1024).toFixed(1);
-
-                if(State.vault.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="text-center p-5 text-secondary">Vault is empty. Deposit your first file.</td></tr>';
-                    document.getElementById('dash-usage').innerText = `0 KB`;
-                    document.getElementById('dash-usage-val').innerText = `0 MB`;
-                    return;
-                }
-                
-                tbody.innerHTML = State.vault.map(f => `
-                    <tr>
-                        <td class="p-4 font-medium">${f.name}</td>
-                        <td class="p-4 font-code text-secondary">${(f.size/1024).toFixed(1)} KB</td>
-                        <td class="p-4 text-indicator-ok font-medium">AES-256</td>
-                        <td class="p-4 text-secondary">${f.type}</td>
-                    </tr>
-                `).join('');
-
-                document.getElementById('dash-usage').innerText = `${totalSizeKB} KB`;
-                document.getElementById('dash-usage-val').innerText = `${totalSizeKB} KB`;
-            },
-            renderLedger: () => {
-                const tbody = document.getElementById('ledger-list');
-                
-                if (State.ledger.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="3" class="text-center p-5 text-secondary">Ledger is currently empty.</td></tr>';
-                } else {
-                    tbody.innerHTML = State.ledger.map(l => `
-                        <tr>
-                            <td class="p-4 font-code text-secondary text-xs">${l.ts.substring(0, 10)} ${l.ts.substring(11, 19)}</td>
-                            <td class="p-4 font-medium">${l.action}</td>
-                            <td class="p-4 font-code text-secondary text-xs">${l.hash.substring(0, 30)}...</td>
-                        </tr>
-                    `).join('');
-                }
-                
-                document.getElementById('dash-ledger').innerText = State.ledger.length;
-            }
-        };
-
-        // --- VAULT LOGIC ---
+        // --- 2. DATA VAULT & LEDGER ---
         const Vault = {
             ingest: async (input) => {
-                if(!input.files[0]) return;
                 const file = input.files[0];
-                
-                // Simulate "Reading" and "Hashing" (Using file metadata as proxy content)
-                const fakeContent = JSON.stringify({ name: file.name, size: file.size, lastModified: file.lastModified });
-                const hash = await CryptoCore.sha256(fakeContent);
-                
-                const entry = {
+                if (!file) return;
+
+                const text = await file.text();
+                const hash = await CryptoCore.sha256(text + Date.now());
+                const fileId = crypto.randomUUID();
+
+                const fileObj = {
+                    id: fileId,
                     name: file.name,
                     size: file.size,
-                    type: file.type || 'unknown',
+                    sizeKB: (file.size / 1024).toFixed(2),
+                    type: file.type || 'text/plain',
+                    content: text, 
                     hash: hash,
-                    added: Date.now()
+                    timestamp: new Date().toISOString(),
+                    marketListed: false,
+                    marketCategory: Vault.categorize(file.name)
                 };
 
-                State.vault.push(entry);
-                
-                // Update Ledger
-                State.ledger.unshift({
-                    ts: new Date().toISOString(),
+                const ledgerBlock = {
+                    hash: hash,
+                    prevHash: await Vault.getLatestLedgerHash(),
+                    timestamp: fileObj.timestamp,
                     action: `DEPOSIT: ${file.name}`,
-                    hash: hash
-                });
+                    fileId: fileId
+                };
 
-                UI.log(`Deposited: ${file.name} (Proof: ${hash.substring(0,8)}...)`);
-                UI.renderVault();
-                UI.renderLedger();
-                input.value = null; // Clear input for next file
-                Router.nav('vault'); // Switch to view result
-            }
-        };
-
-        // --- AI LOGIC (LOCAL SIMULATION) ---
-        const AI = {
-            send: async () => {
-                const inputEl = document.getElementById('chat-input');
-                const text = inputEl.value.trim();
-                if(!text) return;
-
-                AI.appendMsg('user', text);
-                inputEl.value = '';
-
-                // Simulate "Thinking" delay
-                AI.appendMsg('system', 'Reading Vault vectors... Generating response...');
+                await DB.put('files', fileObj);
+                await DB.put('ledger', ledgerBlock);
                 
-                setTimeout(() => {
-                    // Simple Rule-Based Simulation of a RAG System
-                    let response;
-                    const lowerText = text.toLowerCase();
-                    const vaultCount = State.vault.length;
-                    const ledgerCount = State.ledger.length;
-
-                    if(lowerText.includes('hello') || lowerText.includes('hi')) {
-                        response = "Systems online. I am ready to process your data locally.";
-                    }
-                    else if(lowerText.includes('vault') || lowerText.includes('files')) {
-                        if(vaultCount === 0) {
-                            response = "Your vault is currently empty. Upload files to begin building your local knowledge base.";
-                        } else {
-                            const names = State.vault.map(f => f.name).join(', ');
-                            response = `I found **${vaultCount}** items in your secure vault. They include: **${names}**. I can analyze these if you wish.`;
-                        }
-                    }
-                    else if(lowerText.includes('ledger') || lowerText.includes('proof')) {
-                        response = `The ledger contains **${ledgerCount}** immutable entries. The last action was: **${State.ledger[0]?.action || 'None'}**.`;
-                    }
-                    else if(lowerText.includes('export') || lowerText.includes('backup')) {
-                        response = "You can export your entire World state in the **Config** tab. This will generate a `.worldpack` file encrypted with your session key.";
-                    }
-                    else {
-                        response = "I have logged that query. Since I am running in simulation mode, I can only track Vault, Ledger, and System status currently. In the full build, this would trigger a local Llama-3 inference.";
-                    }
-
-                    // Remove "thinking" msg and add real response
-                    const history = document.getElementById('chat-history');
-                    history.lastElementChild.remove();
-                    AI.appendMsg('ai', response);
-                }, 800);
-            },
-            appendMsg: (role, text) => {
-                const history = document.getElementById('chat-history');
-                const div = document.createElement('div');
-                div.className = `msg ${role} p-3 rounded-lg`;
-                div.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>'); // Simple markdown parser
-                history.appendChild(div);
-                history.scrollTop = history.scrollHeight;
-            }
-        };
-
-        // --- SYSTEM UTILITIES ---
-        const System = {
-            exportWorld: () => {
-                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(State, null, 2));
-                const downloadAnchorNode = document.createElement('a');
-                downloadAnchorNode.setAttribute("href", dataStr);
-                downloadAnchorNode.setAttribute("download", `world_backup_${Date.now()}.worldpack`);
-                document.body.appendChild(downloadAnchorNode);
-                downloadAnchorNode.click();
-                downloadAnchorNode.remove();
-                UI.log("World exported to local disk.");
-            },
-            init: () => {
-                // Initial render calls
+                UI.updateAllStats();
                 UI.renderVault();
-                UI.renderLedger();
+                
+                alert(`SECURE DEPOSIT COMPLETE\nFile: ${file.name}\nProof: ${hash.substring(0,16)}...`);
+                input.value = '';
+                Router.nav('vault', document.getElementById('nav-vault'));
+            },
+            getLatestLedgerHash: async () => {
+                const allLedger = await DB.getAll('ledger');
+                if (allLedger.length === 0) return '0000000000000000';
+                return allLedger[allLedger.length - 1].hash;
+            },
+            categorize: (filename) => {
+                if (filename.toLowerCase().includes('health') || filename.toLowerCase().includes('medical')) return 'Health/Wellness';
+                if (filename.toLowerCase().includes('bank') || filename.toLowerCase().includes('finance')) return 'Finance/Spending';
+                if (filename.toLowerCase().includes('social') || filename.toLowerCase().includes('photo')) return 'Social/Activity';
+                return 'General/Other';
             }
         };
         
-        // --- EVENT LISTENERS ---
-        // Handle Enter key in chat
-        document.getElementById('chat-input').addEventListener('keypress', (e) => {
-            if(e.key === 'Enter') AI.send();
-        });
+        // --- 3. DATA MARKETPLACE (PPDM) LOGIC ---
+        const Marketplace = {
+            toggleListing: async (fileId) => {
+                const file = (await DB.getAll('files')).find(f => f.id === fileId);
+                if (!file) return;
 
-        // Initialize the system
-        System.init();
+                file.marketListed = !file.marketListed;
 
+                if (file.marketListed) {
+                    const asset = {
+                        id: fileId,
+                        category: file.marketCategory,
+                        sizeKB: parseFloat(file.sizeKB),
+                        initialValue: Marketplace.simulatePrice(file.marketCategory, file.sizeKB),
+                        isSold: false,
+                        fileHash: file.hash
+                    };
+                    await DB.put('market', asset);
+                    UI.log(`Asset **${file.name}** listed on the Data Market. Initial Price: **\$${asset.initialValue.toFixed(2)}**.`);
+                } else {
+                    const store = DB.getStore('market', 'readwrite');
+                    store.delete(fileId);
+                    UI.log(`Asset **${file.name}** removed from market listing.`);
+                }
+
+                await DB.put('files', file);
+                UI.updateAllStats();
+                Marketplace.render();
+                UI.renderVault();
+            },
+            simulatePrice: (category, sizeKB) => {
+                let base = 0;
+                switch (category) {
+                    case 'Health/Wellness': base = 0.05; break; // Highest value
+                    case 'Finance/Spending': base = 0.03; break;
+                    case 'Social/Activity': base = 0.01; break;
+                    default: base = 0.005;
+                }
+                // Price = Base value per KB * (size + random volatility)
+                return (base * parseFloat(sizeKB)) * (1 + (Math.random() * 0.5 - 0.25));
+            },
+            sellAsset: async (fileId) => {
+                const marketAsset = (await DB.getAll('market')).find(a => a.id === fileId);
+                if (!marketAsset || marketAsset.isSold) return;
+
+                const finalPrice = Marketplace.simulatePrice(marketAsset.category, marketAsset.sizeKB);
+                
+                // --- CRITICAL STEP: SIMULATE TRANSACTION & ANONYMIZATION ---
+                // In a real PPDM, this would trigger an atomic smart contract that:
+                // 1. Anonymizes the data on the client (e.g., Homomorphic Encryption or Differential Privacy).
+                // 2. Transmits the ANONYMIZED derivative data to the buyer.
+                // 3. Transfers funds to the user's wallet.
+                
+                const ledgerBlock = {
+                    hash: await CryptoCore.sha256(marketAsset.fileHash + Date.now()), // New PoD for the transaction
+                    prevHash: await Vault.getLatestLedgerHash(),
+                    timestamp: new Date().toISOString(),
+                    action: `SALE: ${marketAsset.category} Data`,
+                    details: `Sold for \$${finalPrice.toFixed(2)}`
+                };
+
+                await DB.put('ledger', ledgerBlock);
+                marketAsset.isSold = true;
+                await DB.put('market', marketAsset);
+
+                UI.log(`**SUCCESS:** Sold **${marketAsset.category}** data for **\$${finalPrice.toFixed(2)}**. Funds deposited.`);
+                UI.updateAllStats();
+                Marketplace.render();
+            },
+            render: async () => {
+                const tbody = document.getElementById('market-list');
+                const marketAssets = await DB.getAll('market');
+                const listedAssets = marketAssets.filter(a => !a.isSold);
+                
+                tbody.innerHTML = '';
+                
+                if (listedAssets.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-secondary">No data assets listed.</td></tr>';
+                }
+
+                let totalPortfolioValue = 0;
+
+                listedAssets.forEach(asset => {
+                    const currentPrice = Marketplace.simulatePrice(asset.category, asset.sizeKB);
+                    totalPortfolioValue += currentPrice;
+
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-zinc-900/50 transition-colors';
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 text-white font-medium">${asset.category}</td>
+                        <td class="px-6 py-4 text-secondary font-code">${asset.sizeKB} KB</td>
+                        <td class="px-6 py-4 text-indicator-warn font-code">\ $${currentPrice.toFixed(2)}</td>
+                        <td class="px-6 py-4">
+                            <button onclick="Marketplace.sellAsset('${asset.id}')" class="bg-indicator-ok text-black px-3 py-1 rounded text-xs font-semibold hover:bg-emerald-400 transition-colors">
+                                SELL NOW
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                document.getElementById('market-portfolio').innerText = `\$${totalPortfolioValue.toFixed(2)}`;
+                document.getElementById('dash-market-val').innerText = `\$${totalPortfolioValue.toFixed(2)}`;
+            }
+        };
+
+        // --- 4. UI & RENDERING ---
+        const UI = {
+            updateAllStats: async () => {
+                const files = await DB.getAll('files');
+                const ledger = await DB.getAll('ledger');
+                const marketAssets = await DB.getAll('market');
+                const activeAssets = marketAssets.filter(a => !a.isSold);
+                
+                const totalSize = files.reduce((acc, f) => acc + f.size, 0);
+                const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+                
+                document.getElementById('deposit-count').innerText = files.length;
+                document.getElementById('dash-ledger').innerText = ledger.length;
+                document.getElementById('storage-usage').innerText = `${totalSizeMB} MB`;
+                document.getElementById('dash-usage-val').innerText = `${totalSizeMB} MB`;
+                
+                // Update chart on every stat change
+                UI.renderChart(ledger);
+            },
+            renderVault: async () => {
+                const tbody = document.getElementById('vault-list');
+                tbody.innerHTML = ''; // Clear previous
+
+                const files = await DB.getAll('files');
+                
+                if (files.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-secondary">Vault is empty. Deposit files to initialize local encryption.</td></tr>';
+                    return;
+                }
+
+                files.forEach(file => {
+                    const marketBtn = file.marketListed 
+                        ? `<button onclick="Marketplace.toggleListing('${file.id}')" class="bg-red-500 text-white px-2 py-1 rounded text-[10px] font-semibold">LISTED (REMOVE)</button>`
+                        : `<button onclick="Marketplace.toggleListing('${file.id}')" class="bg-blue-500 text-white px-2 py-1 rounded text-[10px] font-semibold">LIST</button>`;
+
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-zinc-900/50 transition-colors';
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 text-white font-medium">${file.name}</td>
+                        <td class="px-6 py-4 text-secondary font-code text-xs">${file.sizeKB} KB</td>
+                        <td class="px-6 py-4 text-indicator-ok font-code text-xs">AES-256-GCM</td>
+                        <td class="px-6 py-4 flex items-center gap-2">
+                            <span class="bg-zinc-800 text-zinc-300 px-2 py-1 rounded text-[10px] border border-zinc-700 font-code">${file.marketCategory}</span>
+                            ${marketBtn}
+                        </td>
+                    `;
+                    tbody.prepend(tr); // Newest first
+                });
+                feather.replace();
+            },
+            renderLedger: async () => {
+                const container = document.getElementById('ledger-list');
+                container.innerHTML = '';
+
+                const ledger = await DB.getAll('ledger');
+
+                if (ledger.length === 0) {
+                    container.innerHTML = '<div class="text-center text-secondary p-5">Ledger is empty.</div>';
+                    return;
+                }
+                
+                // Reverse to show newest first
+                [...ledger].reverse().forEach((block, index) => {
+                    const div = document.createElement('div');
+                    div.className = "ledger-entry p-4 rounded font-code text-xs space-y-2 fade-in";
+                    div.innerHTML = `
+                        <div class="flex justify-between text-zinc-500">
+                            <span>BLOCK: ${ledger.length - index}</span>
+                            <span>${new Date(block.timestamp).toLocaleTimeString()} ${new Date(block.timestamp).toLocaleDateString()}</span>
+                        </div>
+                        <div class="text-primary truncate">ACTION: ${block.action} ${block.details ? `(${block.details})` : ''}</div>
+                        <div class="text-indicator-ok truncate">HASH: ${block.hash.substring(0, 50)}...</div>
+                        <div class="text-zinc-600 truncate">PREV: ${block.prevHash.substring(0, 50)}...</div>
+                    `;
+                    container.appendChild(div);
+                });
+            },
+            renderChart: (ledgerData) => {
+                const ctx = document.getElementById('vaultChart').getContext('2d');
+                
+                // Get cumulative deposits per day
+                const depositDates = ledgerData
+                    .filter(b => b.action.startsWith('DEPOSIT'))
+                    .map(b => new Date(b.timestamp).toLocaleDateString());
+
+                const counts = depositDates.reduce((acc, date) => {
+                    acc[date] = (acc[date] || 0) + 1;
+                    return acc;
+                }, {});
+
+                // Accumulate counts
+                let cumulative = 0;
+                const labels = Object.keys(counts).sort();
+                const data = labels.map(date => cumulative += counts[date]);
+
+                if (window.vaultChartInstance) {
+                    window.vaultChartInstance.destroy();
+                }
+
+                window.vaultChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Cumulative Deposits',
+                            data: data,
+                            borderColor: '#22c55e', // indicator-ok
+                            backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                            tension: 0.3,
+                            fill: true,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, grid: { color: 'rgba(39, 39, 42, 0.5)' }, ticks: { color: '#a1a1aa' } },
+                            x: { grid: { display: false }, ticks: { color: '#a1a1aa' } }
+                        }
+                    }
+                });
+            },
+            log: (msg) => {
+                // Simplified log function
+                console.log(`[LOG] ${msg}`);
+            }
+        };
+
+        const AI = {
+            send: async () => {
+                const input = document.getElementById('ai-input');
+                const query = input.value.trim().toLowerCase();
+                if(!query) return;
+
+                AI.appendChat('user', input.value);
+                input.value = '';
+
+                AI.appendChat('ai', 'Thinking...', true);
+                
+                setTimeout(async () => {
+                    const files = await DB.getAll('files');
+                    const hits = files.filter(f => f.content.toLowerCase().includes(query) || f.name.toLowerCase().includes(query));
+                    
+                    let response = "";
+                    const lastMsg = document.querySelector('.loading-msg');
+                    
+                    if (hits.length > 0) {
+                        response = `I found **${hits.length}** relevant document(s) in your **Local Vault**:\n\n`;
+                        hits.forEach(h => {
+                            response += `> **${h.name}**: "${h.content.substring(0, Math.min(h.content.length, 100))}..."\n`;
+                        });
+                        response += `\nAnalysis complete. **Data never left this device.**`;
+                    } else {
+                        if(query.includes('market') || query.includes('sell')) response = "I see your query about the Data Market. Remember, you control the **Marketplace** listing in the Vault tab. I can monitor prices, but only *you* can authorize the final sale.";
+                        else response = "I searched your local vault and did not find a direct contextual match. Upload files to expand your local knowledge base.";
+                    }
+
+                    if (lastMsg) lastMsg.remove();
+                    AI.appendChat('ai', response);
+
+                }, 1200);
+            },
+            appendChat: (role, text, isLoading = false) => {
+                const container = document.getElementById('chat-history');
+                const div = document.createElement('div');
+                
+                // Determine CSS classes for styling
+                const baseClasses = `flex items-start gap-4 ${role === 'user' ? 'flex-row-reverse' : ''} ${isLoading ? 'loading-msg' : ''}`;
+                const contentClasses = role === 'ai' 
+                    ? 'bg-zinc-900 border-zinc-800 text-zinc-300' 
+                    : 'bg-white text-black';
+                
+                const avatarContent = role === 'ai'
+                    ? '<i data-feather="cpu" class="w-4 h-4 text-indicator-ok"></i>'
+                    : '<i data-feather="user" class="w-4 h-4 text-black"></i>';
+
+                const formattedText = text.replace(/\*\*(.*?)\*\*/g, '<b class="text-white">$1</b>').replace(/\n/g, '<br>');
+
+                div.className = baseClasses;
+                div.innerHTML = `
+                    <div class="w-8 h-8 rounded ${role === 'ai' ? 'bg-zinc-800 border border-zinc-700' : 'bg-white'} flex items-center justify-center shrink-0">
+                        ${avatarContent}
+                    </div>
+                    <div class="${contentClasses} border rounded-lg p-4 max-w-2xl text-sm leading-relaxed shadow-sm">
+                        ${formattedText}
+                    </div>
+                `;
+                container.appendChild(div);
+                container.scrollTop = container.scrollHeight;
+                feather.replace();
+            }
+        };
+
+        // --- INITIALIZATION ---
+        window.onload = async () => {
+            await DB.init();
+            await UI.updateAllStats();
+            Router.nav('dashboard', document.querySelector('.nav-item.active'));
+
+            // Set up Enter key listener
+            document.getElementById('ai-input').addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') AI.send();
+            });
+        };
     </script>
 </body>
 </html>
