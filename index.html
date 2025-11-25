@@ -1,909 +1,997 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WorldOS: Sovereign Data Funds Platform</title>
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-    
-    <script src="https://unpkg.com/feather-icons"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <style>
-        :root {
-            --accent: #06b6d4; /* Tailwind cyan-500 */
-            --accent-inv: #0f172a; /* Tailwind slate-900 */
-            --primary: #f8fafc; /* Tailwind slate-50 */
-            --secondary: #94a3b8; /* Tailwind slate-400 */
-            --indicator-ok: #4ade80; /* Tailwind green-400 */
-            --indicator-warn: #facc15; /* Tailwind yellow-400 */
-            --theme: #334155; /* Tailwind slate-700 */
-            --theme-panel: #1e293b; /* Tailwind slate-800 */
-            --os: #0f172a; /* Tailwind slate-900 */
-            --panel: #1e293b; 
-            --surface: #334155;
-            --text-sec: #94a3b8;
-        }
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import {
+        getAuth,
+        signInAnonymously,
+        signInWithCustomToken,
+        onAuthStateChanged,
+        createUserWithEmailAndPassword,
+        signInWithEmailAndPassword,
+        signOut
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import {
+        getFirestore,
+        doc,
+        setDoc,
+        updateDoc,
+        onSnapshot,
+        collection,
+        query,
+        where,
+        getDocs,
+        arrayUnion,
+        addDoc,
+        serverTimestamp,
+        orderBy
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        /* Basic global styles using CSS variables for Chart.js */
-        .bg-os { background-color: var(--os); }
-        .bg-panel { background-color: var(--panel); }
-        .bg-surface { background-color: var(--surface); }
-        .border-theme { border-color: var(--theme); }
-        .text-primary { color: var(--primary); }
-        .text-secondary { color: var(--secondary); }
-        .text-accent { color: var(--accent); }
-        .text-accent-inv { color: var(--accent-inv); }
-        .text-indicator-ok { color: var(--indicator-ok); }
-        .text-indicator-warn { color: var(--indicator-warn); }
+    // ---- GLOBAL FIREBASE / APP CONSTANTS ----
+    const APP_ID =
+        typeof window !== "undefined" && window.__app_id
+            ? window.__app_id
+            : "default-app-id";
 
-        .nav-item { color: var(--secondary); transition: color 0.2s, background-color 0.2s; }
-        .nav-item:hover { color: var(--primary); }
-        .nav-item.active { color: var(--accent); background-color: rgba(6, 182, 212, 0.1); }
-        .nav-item.active i { color: var(--accent); }
-        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        .font-code { font-family: 'JetBrains Mono', monospace; }
-        
-        .ledger-entry { background-color: var(--theme-panel); border: 1px solid var(--theme); }
-    </style>
-    
-    <script>
-        // These are required by the main script but were missing, causing errors.
-        const __app_id = 'worldos-sovereign-node-demo';
-        const __firebase_config = JSON.stringify({
-            apiKey: "AIzaSy_dummy-api-key-for-test-ONLY",
-            authDomain: "dummy-project.firebaseapp.com",
-            projectId: "dummy-project",
-            storageBucket: "dummy-project.appspot.com",
-            messagingSenderId: "123456789012",
-            appId: "1:123456789012:web:a1b2c3d4e5f6g7h8"
-        });
-        const __initial_auth_token = ''; // Keep this empty for anonymous sign-in flow
-    </script>
-    
-    <script type="module">
-        // The rest of the script remains largely the same, but the Chart.js line is fixed.
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs, arrayUnion, addDoc, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // Expose Firebase objects globally within the module scope
-        const firebase = {
-            initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
-            createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut,
-            getFirestore, doc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs,
-            arrayUnion, addDoc, serverTimestamp, orderBy
-        };
-        
-        // --- GLOBAL CONSTANTS ---
-        const DB_NAME = 'WorldOS_SovereignNode_Local';
-        const DB_VERSION = 1;
-        const COMMISSION_RATE = 0.15;
-        
-        let auth, db;
-        let userId = null;
-        let userType = null;
-        let userProfile = { totalYield: 0, funds: {} };
+    const FIREBASE_CONFIG_STR =
+        typeof window !== "undefined" && window.__firebase_config
+            ? window.__firebase_config
+            : null;
 
-        // --- GLOBAL STATE ---
-        let WorldState = {
-            db: null, // IndexedDB instance
-            dataFunds: [] // Firestore funds metadata
-        };
-        
-        // --- 0. DATA PERSISTENCE (INDEXEDDB - LOCAL CONTENT) ---
-        const LocalDB = {
-            init: () => {
-                return new Promise((resolve, reject) => {
-                    const request = indexedDB.open(DB_NAME, DB_VERSION);
-                    request.onupgradeneeded = (e) => {
-                        WorldState.db = e.target.result;
-                        WorldState.db.createObjectStore('files', { keyPath: 'id' });
-                    };
-                    request.onsuccess = (e) => { WorldState.db = e.target.result; resolve(); };
-                    request.onerror = (e) => { console.error("IndexedDB Error:", e.target.error); reject(e.target.error); };
-                });
-            },
-            getStore: (storeName, mode) => WorldState.db.transaction(storeName, mode).objectStore(storeName),
-            putFile: (file) => new Promise((resolve, reject) => {
-                const request = LocalDB.getStore('files', 'readwrite').put(file);
+    const firebase = {
+        initializeApp,
+        getAuth,
+        signInAnonymously,
+        signInWithCustomToken,
+        onAuthStateChanged,
+        createUserWithEmailAndPassword,
+        signInWithEmailAndPassword,
+        signOut,
+        getFirestore,
+        doc,
+        setDoc,
+        updateDoc,
+        onSnapshot,
+        collection,
+        query,
+        where,
+        getDocs,
+        arrayUnion,
+        addDoc,
+        serverTimestamp,
+        orderBy
+    };
+
+    // --- GLOBAL CONSTANTS ---
+    const DB_NAME = "WorldOS_SovereignNode_Local";
+    const DB_VERSION = 1;
+    const COMMISSION_RATE = 0.15;
+
+    let auth, db;
+    let userId = null;
+    let userType = null;
+    let userProfile = { totalYield: [], funds: {}, userType: "individual" };
+
+    // --- GLOBAL STATE ---
+    let WorldState = {
+        db: null, // IndexedDB instance
+        dataFunds: [] // Firestore funds metadata
+    };
+
+    // Helper: user profile doc (flattened, not nested)
+    const getUserProfileRef = (uid) =>
+        firebase.doc(db, "artifacts", APP_ID, "users", uid);
+
+    // --- 0. DATA PERSISTENCE (INDEXEDDB - LOCAL CONTENT) ---
+    const LocalDB = {
+        init: () => {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onupgradeneeded = (e) => {
+                    WorldState.db = e.target.result;
+                    if (!WorldState.db.objectStoreNames.contains("files")) {
+                        WorldState.db.createObjectStore("files", { keyPath: "id" });
+                    }
+                };
+                request.onsuccess = (e) => {
+                    WorldState.db = e.target.result;
+                    resolve();
+                };
+                request.onerror = (e) => {
+                    console.error("IndexedDB Error:", e.target.error);
+                    reject(e.target.error);
+                };
+            });
+        },
+        getStore: (storeName, mode) =>
+            WorldState.db.transaction(storeName, mode).objectStore(storeName),
+        putFile: (file) =>
+            new Promise((resolve, reject) => {
+                const request = LocalDB.getStore("files", "readwrite").put(file);
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error);
             }),
-            getAllFiles: () => new Promise((resolve, reject) => {
-                const request = LocalDB.getStore('files', 'readonly').getAll();
+        getAllFiles: () =>
+            new Promise((resolve, reject) => {
+                const request = LocalDB.getStore("files", "readonly").getAll();
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error);
             })
-        };
+    };
 
-        // --- CORE ROUTER (EXPOSED) ---
-        const Router = window.Router = {
-            nav: (viewId, element) => {
-                document.querySelectorAll('.view-section').forEach(el => {
-                    el.classList.add('hidden');
-                    el.classList.remove('fade-in');
-                });
-                
-                const targetView = document.getElementById('view-' + viewId);
-                targetView.classList.remove('hidden');
-                targetView.classList.add('fade-in');
+    // --- CORE ROUTER (EXPOSED) ---
+    const Router = (window.Router = {
+        nav: (viewId, element) => {
+            document.querySelectorAll(".view-section").forEach((el) => {
+                el.classList.add("hidden");
+                el.classList.remove("fade-in");
+            });
 
-                document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-                if (element) element.classList.add('active');
-                
-                document.getElementById('breadcrumb').innerText = `SYSTEM // ${viewId.toUpperCase()}`;
+            const targetView = document.getElementById("view-" + viewId);
+            if (!targetView) return;
+            targetView.classList.remove("hidden");
+            targetView.classList.add("fade-in");
 
-                if (viewId === 'vault') UI.renderVault();
-                if (viewId === 'ledger') UI.renderLedger();
-                if (viewId === 'marketplace') DataFunds.render();
+            document.querySelectorAll(".nav-item").forEach((el) =>
+                el.classList.remove("active")
+            );
+            if (element) element.classList.add("active");
+
+            document.getElementById(
+                "breadcrumb"
+            ).innerText = `SYSTEM // ${viewId.toUpperCase()}`;
+
+            if (viewId === "vault") UI.renderVault();
+            if (viewId === "ledger") UI.renderLedger();
+            if (viewId === "marketplace") DataFunds.render();
+        }
+    });
+
+    // --- AUTHENTICATION (EXPOSED) ---
+    const Auth = (window.Auth = {
+        setError: (msg) =>
+            (document.getElementById("auth-error").innerText = msg || ""),
+        signIn: async () => {
+            Auth.setError("");
+            const email = document.getElementById("auth-email").value;
+            const password = document.getElementById("auth-password").value;
+            if (!email || !password)
+                return Auth.setError("Email and password are required.");
+            try {
+                await firebase.signInWithEmailAndPassword(auth, email, password);
+            } catch (error) {
+                Auth.setError(error.message.replace("Firebase:", "").trim());
             }
-        };
+        },
+        signUp: async () => {
+            Auth.setError("");
+            const email = document.getElementById("auth-email").value;
+            const password = document.getElementById("auth-password").value;
+            const selectedType = document.getElementById("auth-user-type").value;
 
-        // --- AUTHENTICATION (EXPOSED) ---
-        const Auth = window.Auth = {
-            setError: (msg) => document.getElementById('auth-error').innerText = msg,
-            signIn: async () => {
-                Auth.setError('');
-                const email = document.getElementById('auth-email').value;
-                const password = document.getElementById('auth-password').value;
-                if (!email || !password) return Auth.setError("Email and password are required.");
+            if (!email || !password || password.length < 6) {
+                return Auth.setError("Password must be at least 6 characters.");
+            }
+
+            try {
+                await firebase.signOut(auth);
+
+                const userCredential = await firebase.createUserWithEmailAndPassword(
+                    auth,
+                    email,
+                    password
+                );
+                const uid = userCredential.user.uid;
+                const userDocRef = getUserProfileRef(uid);
+
+                await firebase.setDoc(userDocRef, {
+                    totalYield: [],
+                    funds: {},
+                    userType: selectedType,
+                    joined: firebase.serverTimestamp()
+                });
+            } catch (error) {
+                Auth.setError(error.message.replace("Firebase:", "").trim());
+                // Re-init anonymous session if registration failed
                 try {
-                    await firebase.signInWithEmailAndPassword(auth, email, password);
-                } catch (error) {
-                    Auth.setError(error.message.replace('Firebase:', '').trim());
+                    await firebase.signInAnonymously(auth);
+                } catch (e) {
+                    console.error("Anon sign-in failed after signUp error:", e);
                 }
-            },
-            signUp: async () => {
-                Auth.setError('');
-                const email = document.getElementById('auth-email').value;
-                const password = document.getElementById('auth-password').value;
-                const selectedType = document.getElementById('auth-user-type').value;
-                if (!email || !password || password.length < 6) return Auth.setError("Password must be at least 6 characters.");
-                
-                try {
-                    await firebase.signOut(auth);
-                    
-                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-                    
-                    const userCredential = await firebase.createUserWithEmailAndPassword(auth, email, password);
-                    const uid = userCredential.user.uid;
-                    const userDocRef = firebase.doc(db, "artifacts", appId, "users", uid, "profile", "data");
+            }
+        },
+        signOut: async () => {
+            await firebase.signOut(auth);
+            window.location.reload();
+        }
+    });
 
-                    await firebase.setDoc(userDocRef, { 
-                        totalYield: 0, 
-                        funds: {}, 
-                        userType: selectedType, 
-                        joined: firebase.serverTimestamp() 
-                    });
-                    
-                } catch (error) {
-                    Auth.setError(error.message.replace('Firebase:', '').trim());
-                    // Re-initialize an anonymous session if registration failed
+    // --- FIREBASE INITIALIZATION ---
+    const FirebaseInit = {
+        setup: async () => {
+            try {
+                if (!FIREBASE_CONFIG_STR) {
+                    console.error("Missing __firebase_config on window.");
+                    Auth.setError(
+                        "Initialization failed: Firebase config not provided."
+                    );
+                    return;
+                }
+
+                const firebaseConfig = JSON.parse(FIREBASE_CONFIG_STR);
+                if (!firebaseConfig.apiKey) {
+                    console.error("Invalid Firebase config:", firebaseConfig);
+                    Auth.setError(
+                        "Initialization failed: Firebase config is invalid."
+                    );
+                    return;
+                }
+
+                const app = firebase.initializeApp(firebaseConfig);
+                db = firebase.getFirestore(app);
+                auth = firebase.getAuth(app);
+
+                const initialToken =
+                    typeof window !== "undefined" &&
+                    window.__initial_auth_token
+                        ? window.__initial_auth_token
+                        : "";
+
+                if (initialToken) {
+                    await firebase.signInWithCustomToken(auth, initialToken);
+                } else {
                     await firebase.signInAnonymously(auth);
                 }
-            },
-            signOut: async () => {
-                await firebase.signOut(auth);
-                window.location.reload(); 
+
+                firebase.onAuthStateChanged(auth, FirebaseInit.handleAuthState);
+            } catch (e) {
+                console.error("Firebase setup failed:", e);
+                Auth.setError(`Initialization failed. Check console for details.`);
             }
-        };
+        },
+        handleAuthState: (user) => {
+            if (user) {
+                userId = user.uid;
+                document.getElementById("auth-overlay").classList.add("hidden");
+                FirebaseInit.loadUserProfile(userId);
+                UI.enableApp();
+            } else {
+                document.getElementById("auth-overlay").classList.remove("hidden");
+                UI.disableApp();
+            }
+        },
+        loadUserProfile: (uid) => {
+            const userDocRef = getUserProfileRef(uid);
 
-        // --- FIREBASE INITIALIZATION ---
-        const FirebaseInit = {
-            setup: async () => {
-                try {
-                    // ⚠️ NO CHANGE REQUIRED HERE: Globals are now defined above.
-                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-                    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-                    
-                    const app = firebase.initializeApp(firebaseConfig);
-                    db = firebase.getFirestore(app);
-                    auth = firebase.getAuth(app);
-
-                    const initialToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '';
-                    if (initialToken) {
-                        await firebase.signInWithCustomToken(auth, initialToken);
-                    } else {
-                        await firebase.signInAnonymously(auth);
-                    }
-                    
-                    firebase.onAuthStateChanged(auth, FirebaseInit.handleAuthState);
-
-                } catch (e) {
-                    console.error("Firebase setup failed:", e);
-                    Auth.setError(`Initialization failed. Check console for details.`);
-                }
-            },
-            handleAuthState: (user) => {
-                if (user) {
-                    userId = user.uid;
-                    document.getElementById('auth-overlay').classList.add('hidden');
-                    FirebaseInit.loadUserProfile(userId);
-                    UI.enableApp();
-                } else {
-                    document.getElementById('auth-overlay').classList.remove('hidden');
-                    UI.disableApp();
-                }
-            },
-            loadUserProfile: (uid) => {
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-                const userDocRef = firebase.doc(db, "artifacts", appId, "users", uid, "profile", "data");
-                
-                firebase.onSnapshot(userDocRef, (docSnap) => {
+            firebase.onSnapshot(
+                userDocRef,
+                async (docSnap) => {
                     if (docSnap.exists()) {
-                        userProfile = docSnap.data();
-                        userType = userProfile.userType || 'individual';
+                        const data = docSnap.data() || {};
+                        userProfile = {
+                            totalYield: Array.isArray(data.totalYield)
+                                ? data.totalYield
+                                : [],
+                            funds: data.funds || {},
+                            userType: data.userType || "individual"
+                        };
+                        userType = userProfile.userType;
                     } else {
-                        userProfile = { totalYield: 0, funds: {}, userType: 'individual' };
-                        userType = 'individual';
-                        firebase.setDoc(userDocRef, userProfile);
+                        userProfile = {
+                            totalYield: [],
+                            funds: {},
+                            userType: "individual"
+                        };
+                        userType = "individual";
+                        await firebase.setDoc(userDocRef, userProfile);
                     }
                     UI.updateHeader();
                     DataFunds.listen();
                     UI.renderLedger();
-                }, (error) => console.error("Error loading user profile:", error));
-            }
-        };
+                },
+                (error) => console.error("Error loading user profile:", error)
+            );
+        }
+    };
 
-        // --- CORE LOGIC BLOCKS ---
-        
-        const CryptoCore = {
-            async sha256(message) {
-                const msgBuffer = new TextEncoder().encode(message);
-                const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-                const hashArray = Array.from(new Uint8Array(hashBuffer));
-                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            }
-        };
-        
-        const Vault = window.Vault = {
-            ingest: async (input) => {
-                if (!userId || userType !== 'individual') return alert('Please sign in as an Individual Data Sovereign to deposit files.');
-                const file = input.files[0];
-                if (!file) return;
+    // --- CORE LOGIC BLOCKS ---
 
-                const text = await file.text();
-                const fileId = crypto.randomUUID();
+    const CryptoCore = {
+        async sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray
+                .map((b) => b.toString(16).padStart(2, "0"))
+                .join("");
+        }
+    };
 
-                const podHash = await CryptoCore.sha256(text + Date.now()); 
-                const category = Vault.categorize(file.name, text);
-                
-                const fileMetadata = {
-                    id: fileId,
-                    name: file.name,
-                    size: file.size,
-                    sizeKB: (file.size / 1024).toFixed(2),
-                    marketCategory: category,
-                    pouScore: category === 'Financial/Tax' ? Math.floor(Math.random() * 20 + 70) : 10,
-                    isAllocated: false,
-                    podHash: podHash,
-                    ownerId: userId,
-                    timestamp: firebase.serverTimestamp()
-                };
+    const Vault = (window.Vault = {
+        ingest: async (input) => {
+            if (!userId || userType !== "individual")
+                return alert(
+                    "Please sign in as an Individual Data Sovereign to deposit files."
+                );
+            const file = input.files[0];
+            if (!file) return;
 
-                await LocalDB.putFile({ id: fileId, content: text, ...fileMetadata });
-                
-                const metadataColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "fileMetadata");
-                await firebase.addDoc(metadataColRef, fileMetadata);
-                
-                const ledgerColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
-                await firebase.addDoc(ledgerColRef, {
-                    hash: podHash,
-                    action: `DEPOSIT: ${file.name} (${category})`,
-                    type: 'POD',
-                    timestamp: firebase.serverTimestamp()
-                });
-                
-                alert(`SECURE DEPOSIT COMPLETE: File Metadata Synced. Raw File is Local.`);
-                input.value = '';
-                UI.renderVault();
-            },
-            categorize: (filename, content) => {
-                const lowFilename = filename.toLowerCase();
-                const lowContent = content.toLowerCase();
-                if (lowFilename.includes('bank') || lowFilename.includes('tax') || lowContent.includes('chase') || lowContent.includes('amex')) return 'Financial/Tax';
-                if (lowFilename.includes('mobility') || lowFilename.includes('ev') || lowContent.includes('tesla')) return 'Urban/Mobility';
-                if (lowFilename.includes('shopping') || lowContent.includes('amazon')) return 'Retail/E-commerce';
-                return 'General/Other';
-            },
-        };
+            const text = await file.text();
+            const fileId = crypto.randomUUID();
 
-        const DataFunds = window.DataFunds = {
-            listen: () => {
-                const fundsColRef = firebase.collection(db, "artifacts", __app_id, "public", "data", "dataFunds");
-                const q = firebase.query(fundsColRef); 
-                firebase.onSnapshot(q, (snapshot) => {
-                    WorldState.dataFunds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const podHash = await CryptoCore.sha256(text + Date.now());
+            const category = Vault.categorize(file.name, text);
+
+            const fileMetadata = {
+                id: fileId,
+                name: file.name,
+                size: file.size,
+                sizeKB: (file.size / 1024).toFixed(2),
+                marketCategory: category,
+                pouScore:
+                    category === "Financial/Tax"
+                        ? Math.floor(Math.random() * 20 + 70)
+                        : 10,
+                isAllocated: false,
+                podHash: podHash,
+                ownerId: userId,
+                timestamp: firebase.serverTimestamp()
+            };
+
+            await LocalDB.putFile({ id: fileId, content: text, ...fileMetadata });
+
+            const metadataColRef = firebase.collection(
+                db,
+                "artifacts",
+                APP_ID,
+                "users",
+                userId,
+                "fileMetadata"
+            );
+            await firebase.addDoc(metadataColRef, fileMetadata);
+
+            const ledgerColRef = firebase.collection(
+                db,
+                "artifacts",
+                APP_ID,
+                "users",
+                userId,
+                "userLedger"
+            );
+            await firebase.addDoc(ledgerColRef, {
+                hash: podHash,
+                action: `DEPOSIT: ${file.name} (${category})`,
+                type: "POD",
+                timestamp: firebase.serverTimestamp()
+            });
+
+            alert(
+                `SECURE DEPOSIT COMPLETE: File Metadata Synced. Raw File is Local.`
+            );
+            input.value = "";
+            UI.renderVault();
+        },
+        categorize: (filename, content) => {
+            const lowFilename = filename.toLowerCase();
+            const lowContent = content.toLowerCase();
+            if (
+                lowFilename.includes("bank") ||
+                lowFilename.includes("tax") ||
+                lowContent.includes("chase") ||
+                lowContent.includes("amex")
+            )
+                return "Financial/Tax";
+            if (
+                lowFilename.includes("mobility") ||
+                lowFilename.includes("ev") ||
+                lowContent.includes("tesla")
+            )
+                return "Urban/Mobility";
+            if (
+                lowFilename.includes("shopping") ||
+                lowContent.includes("amazon")
+            )
+                return "Retail/E-commerce";
+            return "General/Other";
+        }
+    });
+
+    const DataFunds = (window.DataFunds = {
+        listen: () => {
+            const fundsColRef = firebase.collection(
+                db,
+                "artifacts",
+                APP_ID,
+                "public",
+                "data",
+                "dataFunds"
+            );
+            const q = firebase.query(fundsColRef);
+            firebase.onSnapshot(
+                q,
+                (snapshot) => {
+                    WorldState.dataFunds = snapshot.docs.map((docSnap) => ({
+                        id: docSnap.id,
+                        ...docSnap.data()
+                    }));
                     DataFunds.render();
-                }, (error) => console.error("Error loading funds:", error));
-            },
-            render: () => {
-                UI.renderDataFunds();
-                UI.renderYieldPortfolio();
-            },
-            toggleFundAllocation: async (fundId, isJoining) => {
-                if (userType !== 'individual') return alert('Only individual users can allocate data to funds.');
-                
-                const files = await LocalDB.getAllFiles();
-                const financialAssets = files.filter(f => f.marketCategory === 'Financial/Tax');
-                if (financialAssets.length === 0) return alert('Deposit financial files (Financial/Tax category) first to join this fund.');
+                },
+                (error) => console.error("Error loading funds:", error)
+            );
+        },
+        render: () => {
+            UI.renderDataFunds();
+            UI.renderYieldPortfolio();
+        },
+        toggleFundAllocation: async (fundId, isJoining) => {
+            if (userType !== "individual")
+                return alert("Only individual users can allocate data to funds.");
 
-                const userDocRef = firebase.doc(db, "artifacts", __app_id, "users", userId, "profile", "data");
-                
-                if (isJoining) {
-                    if (userProfile.funds && userProfile.funds[fundId]) {
-                        alert(`Already allocated to ${fundId}.`);
-                        return;
+            const files = await LocalDB.getAllFiles();
+            const financialAssets = files.filter(
+                (f) => f.marketCategory === "Financial/Tax"
+            );
+            if (financialAssets.length === 0)
+                return alert(
+                    "Deposit financial files (Financial/Tax category) first to join this fund."
+                );
+
+            const userDocRef = getUserProfileRef(userId);
+            const existingFunds = userProfile.funds || {};
+
+            if (isJoining) {
+                if (existingFunds[fundId]) {
+                    alert(`Already allocated to ${fundId}.`);
+                    return;
+                }
+                await firebase.updateDoc(userDocRef, {
+                    [`funds.${fundId}`]: {
+                        allocationTime: firebase.serverTimestamp(),
+                        assetCount: financialAssets.length
                     }
-                    await firebase.updateDoc(userDocRef, {
-                        [`funds.${fundId}`]: {
-                            allocationTime: firebase.serverTimestamp(),
-                            assetCount: financialAssets.length
-                        }
-                    });
-                    alert(`Successfully allocated ${financialAssets.length} assets to ${fundId}!`);
-                } else {
-                    let newFunds = { ...userProfile.funds };
-                    delete newFunds[fundId];
-                    await firebase.setDoc(userDocRef, { funds: newFunds }, { merge: true });
-                    alert(`Deallocated from ${fundId}.`);
-                }
-                UI.renderYieldPortfolio();
-                UI.renderVault();
-            },
-            simulatePayout: async () => {
-                if (userType !== 'company') return alert('Only Company users can trigger a B2B usage/payout event.');
+                });
+                alert(
+                    `Successfully allocated ${financialAssets.length} assets to ${fundId}!`
+                );
+            } else {
+                const newFunds = { ...existingFunds };
+                delete newFunds[fundId];
+                await firebase.setDoc(
+                    userDocRef,
+                    { funds: newFunds },
+                    { merge: true }
+                );
+                alert(`Deallocated from ${fundId}.`);
+            }
 
-                const B2B_SDA_BUNDLE_PRICE = 50000; 
-                const commission = B2B_SDA_BUNDLE_PRICE * COMMISSION_RATE;
-                const payoutPool = B2B_SDA_BUNDLE_PRICE - commission;
+            // Refresh local view of profile (will also come via snapshot, but this keeps UX snappy)
+            userProfile.funds = (await (await firebase.getDocs(
+                firebase.query(firebase.collection(db, "artifacts", APP_ID, "users"))
+            )).docs.find((d) => d.id === userId)?.data()?.funds) || newFunds;
 
-                const allUsersSnapshot = await firebase.getDocs(firebase.collection(db, "artifacts", __app_id, "users"));
-                let totalAssetCount = 0;
-                let userAssetMap = {};
+            UI.renderYieldPortfolio();
+            UI.renderVault();
+        },
+        simulatePayout: async () => {
+            if (userType !== "company")
+                return alert(
+                    "Only Company users can trigger a B2B usage/payout event."
+                );
 
-                for (const docSnap of allUsersSnapshot.docs) {
-                    const profile = docSnap.data();
-                    if (profile.userType === 'individual' && profile.funds) {
-                        let userAssets = 0;
-                        for (const fundId in profile.funds) {
-                            userAssets += profile.funds[fundId].assetCount;
-                        }
-                        if (userAssets > 0) {
-                             userAssetMap[docSnap.id] = userAssets;
-                             totalAssetCount += userAssets;
-                        }
+            const B2B_SDA_BUNDLE_PRICE = 50000;
+            const commission = B2B_SDA_BUNDLE_PRICE * COMMISSION_RATE;
+            const payoutPool = B2B_SDA_BUNDLE_PRICE - commission;
+
+            const allUsersSnapshot = await firebase.getDocs(
+                firebase.collection(db, "artifacts", APP_ID, "users")
+            );
+            let totalAssetCount = 0;
+            let userAssetMap = {};
+
+            for (const docSnap of allUsersSnapshot.docs) {
+                const profile = docSnap.data() || {};
+                if (profile.userType === "individual" && profile.funds) {
+                    let userAssets = 0;
+                    for (const fundId in profile.funds) {
+                        userAssets += profile.funds[fundId].assetCount || 0;
+                    }
+                    if (userAssets > 0) {
+                        userAssetMap[docSnap.id] = userAssets;
+                        totalAssetCount += userAssets;
                     }
                 }
+            }
 
-                if (totalAssetCount === 0) return alert('No users currently contributing assets.');
+            if (totalAssetCount === 0)
+                return alert("No users currently contributing assets.");
 
-                const yieldPayouts = {};
-                for (const uid in userAssetMap) {
-                    const share = userAssetMap[uid] / totalAssetCount;
-                    yieldPayouts[uid] = payoutPool * share;
-                }
-                
-                const updatePromises = [];
-                for (const uid in yieldPayouts) {
-                    const userRef = firebase.doc(db, "artifacts", __app_id, "users", uid, "profile", "data");
-                    // ⚠️ FIX: totalYield is an array of objects, arrayUnion is used.
-                    // This update logic is correct for the data structure in loadUserProfile.
-                    updatePromises.push(firebase.updateDoc(userRef, {
+            const yieldPayouts = {};
+            for (const uid in userAssetMap) {
+                const share = userAssetMap[uid] / totalAssetCount;
+                yieldPayouts[uid] = payoutPool * share;
+            }
+
+            const updatePromises = [];
+            for (const uid in yieldPayouts) {
+                const userRef = getUserProfileRef(uid);
+                updatePromises.push(
+                    firebase.updateDoc(userRef, {
                         totalYield: firebase.arrayUnion({
                             amount: yieldPayouts[uid],
                             date: firebase.serverTimestamp(),
-                            source: 'SDA B2B Bundle Sale'
+                            source: "SDA B2B Bundle Sale"
                         })
-                    }));
+                    })
+                );
+            }
+
+            const companyLedgerRef = firebase.collection(
+                db,
+                "artifacts",
+                APP_ID,
+                "users",
+                userId,
+                "userLedger"
+            );
+            await firebase.addDoc(companyLedgerRef, {
+                action: "B2B SDA Bundle Purchase",
+                details: `Paid $${B2B_SDA_BUNDLE_PRICE.toFixed(
+                    2
+                )} to use derivative assets. WorldOS commission: $${commission.toFixed(
+                    2
+                )}.`,
+                timestamp: firebase.serverTimestamp(),
+                type: "COMPANY_EXPENSE"
+            });
+
+            await Promise.all(updatePromises);
+            alert(
+                `SUCCESS: Simulated B2B Purchase and distributed $${payoutPool.toFixed(
+                    2
+                )} yield across ${Object.keys(yieldPayouts).length} users!`
+            );
+        }
+    });
+
+    const AI = (window.AI = {
+        send: async () => {
+            if (userType !== "individual")
+                return alert("Only individual users can generate Proof of Utility blocks.");
+            const input = document.getElementById("ai-input");
+            const query = input.value.trim().toLowerCase();
+            if (!query) return;
+
+            AI.appendChat("user", input.value);
+            input.value = "";
+
+            AI.appendChat("ai", "Thinking...", true);
+
+            setTimeout(async () => {
+                const files = await LocalDB.getAllFiles();
+                const hits = files.filter(
+                    (f) =>
+                        f.marketCategory === "Financial/Tax" &&
+                        (f.content.toLowerCase().includes(query) ||
+                            f.name.toLowerCase().includes(query))
+                );
+
+                let response = "";
+                const lastMsg = document.querySelector(".loading-msg");
+
+                if (hits.length > 0) {
+                    const ledgerColRef = firebase.collection(
+                        db,
+                        "artifacts",
+                        APP_ID,
+                        "users",
+                        userId,
+                        "userLedger"
+                    );
+                    await firebase.addDoc(ledgerColRef, {
+                        action: `POU: Normalized ${query.substring(0, 30)}...`,
+                        type: "POU",
+                        timestamp: firebase.serverTimestamp()
+                    });
+
+                    response = `RAG Inference Complete. Analyzed **${hits.length}** financial assets.\n\n`;
+                    response +=
+                        "**Proof of Utility (PoU) Block Generated:** This proves data normalization and verification. This increases the value of your Data Fund allocation.\n\n";
+                    response += `> Check the Ledger for verification.`;
+                } else {
+                    response =
+                        "I searched your local vault but found no financial assets matching that query. Upload files or adjust your query.";
                 }
 
-                const companyLedgerRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
-                await firebase.addDoc(companyLedgerRef, {
-                    action: "B2B SDA Bundle Purchase",
-                    details: `Paid \$${B2B_SDA_BUNDLE_PRICE.toFixed(2)} to use derivative assets. WorldOS commission: \$${commission.toFixed(2)}.`,
-                    timestamp: firebase.serverTimestamp(),
-                    type: 'COMPANY_EXPENSE'
-                });
+                if (lastMsg) lastMsg.remove();
+                AI.appendChat("ai", response);
+            }, 1200);
+        },
+        appendChat: (role, text, isLoading = false) => {
+            const container = document.getElementById("chat-history");
+            const div = document.createElement("div");
 
-                await Promise.all(updatePromises);
-                alert(`SUCCESS: Simulated B2B Purchase and distributed \$${payoutPool.toFixed(2)} yield across ${Object.keys(yieldPayouts).length} users!`);
-            }
-        };
+            const baseClasses = `flex items-start gap-4 ${
+                role === "user" ? "flex-row-reverse" : ""
+            } ${isLoading ? "loading-msg" : ""}`;
+            const contentClasses =
+                role === "ai"
+                    ? "bg-zinc-900 border-zinc-800 text-zinc-300"
+                    : "bg-white text-black";
 
-        const AI = window.AI = {
-             send: async () => {
-                if (userType !== 'individual') return alert('Only individual users can generate Proof of Utility blocks.');
-                const input = document.getElementById('ai-input');
-                const query = input.value.trim().toLowerCase();
-                if(!query) return;
-
-                AI.appendChat('user', input.value);
-                input.value = '';
-
-                AI.appendChat('ai', 'Thinking...', true);
-                
-                setTimeout(async () => {
-                    const files = await LocalDB.getAllFiles();
-                    // ⚠️ FIX: The original code accessed a non-existent 'content' property directly from the file object. 
-                    // LocalDB.putFile stores the content on the object, so this is correct if LocalDB.getAllFiles is working.
-                    const hits = files.filter(f => f.marketCategory === 'Financial/Tax' && (f.content.toLowerCase().includes(query) || f.name.toLowerCase().includes(query)));
-                    
-                    let response = "";
-                    const lastMsg = document.querySelector('.loading-msg');
-                    
-                    if (hits.length > 0) {
-                        const ledgerColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
-                        await firebase.addDoc(ledgerColRef, { 
-                            action: `POU: Normalized ${query.substring(0, 30)}...`,
-                            type: 'POU',
-                            timestamp: firebase.serverTimestamp()
-                        });
-
-                        response = `RAG Inference Complete. Analyzed **${hits.length}** financial assets.\n\n`;
-                        response += `**Proof of Utility (PoU) Block Generated:** This proves data normalization and verification. This increases the value of your Data Fund allocation.\n\n`;
-                        response += `> Check the Ledger for verification.`;
-                    } else {
-                        response = "I searched your local vault but found no financial assets matching that query. Upload files or adjust your query.";
-                    }
-
-                    if (lastMsg) lastMsg.remove();
-                    AI.appendChat('ai', response);
-
-                }, 1200);
-            },
-            appendChat: (role, text, isLoading = false) => {
-                const container = document.getElementById('chat-history');
-                const div = document.createElement('div');
-                
-                const baseClasses = `flex items-start gap-4 ${role === 'user' ? 'flex-row-reverse' : ''} ${isLoading ? 'loading-msg' : ''}`;
-                const contentClasses = role === 'ai' 
-                    ? 'bg-zinc-900 border-zinc-800 text-zinc-300' 
-                    : 'bg-white text-black';
-                
-                const avatarContent = role === 'ai'
+            const avatarContent =
+                role === "ai"
                     ? '<i data-feather="cpu" class="w-4 h-4 text-indicator-ok"></i>'
                     : '<i data-feather="user" class="w-4 h-4 text-black"></i>';
 
-                const formattedText = text.replace(/\*\*(.*?)\*\*/g, '<b class="text-white">$1</b>').replace(/\n/g, '<br>');
+            const formattedText = text
+                .replace(/\*\*(.*?)\*\*/g, '<b class="text-white">$1</b>')
+                .replace(/\n/g, "<br>");
 
-                div.className = baseClasses;
-                div.innerHTML = `
-                    <div class="w-8 h-8 rounded ${role === 'ai' ? 'bg-zinc-800 border border-zinc-700' : 'bg-white'} flex items-center justify-center shrink-0">
-                        ${avatarContent}
+            div.className = baseClasses;
+            div.innerHTML = `
+                <div class="w-8 h-8 rounded ${
+                    role === "ai"
+                        ? "bg-zinc-800 border border-zinc-700"
+                        : "bg-white"
+                } flex items-center justify-center shrink-0">
+                    ${avatarContent}
+                </div>
+                <div class="${contentClasses} border rounded-lg p-4 max-w-2xl text-sm leading-relaxed shadow-sm">
+                    ${formattedText}
+                </div>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            feather.replace();
+        }
+    });
+
+    const UI = (window.UI = {
+        enableApp: () => {
+            document
+                .querySelectorAll(".view-section")
+                .forEach((el) => (el.style.pointerEvents = "auto"));
+            const curr = auth.currentUser;
+            const label =
+                (curr && curr.email) ||
+                (curr && curr.uid ? curr.uid.substring(0, 8) : "Unknown");
+            document.getElementById(
+                "user-display"
+            ).innerText = `User: ${label} | Type: ${userType}`;
+        },
+        disableApp: () => {
+            document
+                .querySelectorAll(".view-section")
+                .forEach((el) => (el.style.pointerEvents = "none"));
+        },
+        updateHeader: () => {
+            const totalYield = (userProfile.totalYield || []).reduce(
+                (sum, item) => sum + (item.amount || 0),
+                0
+            );
+            document.getElementById(
+                "dash-yield"
+            ).innerText = `$${totalYield.toFixed(2)}`;
+            document.getElementById("dash-funds-count").innerText =
+                Object.keys(userProfile.funds || {}).length;
+            document.getElementById("current-user-type").innerText =
+                userType === "company" ? "Enterprise" : "Individual";
+        },
+        renderVault: async () => {
+            const tbody = document.getElementById("vault-list");
+            tbody.innerHTML = "";
+
+            const files = await LocalDB.getAllFiles();
+
+            if (files.length === 0) {
+                tbody.innerHTML =
+                    '<tr><td colspan="4" class="px-6 py-12 text-center text-secondary">Vault is empty. Deposit files to initialize local encryption.</td></tr>';
+                return;
+            }
+
+            files.forEach((file) => {
+                const isAllocated = Object.keys(userProfile.funds || {}).some(
+                    (fundId) =>
+                        file.marketCategory === "Financial/Tax" &&
+                        userProfile.funds[fundId]
+                );
+
+                const tr = document.createElement("tr");
+                tr.className = "hover:bg-zinc-900/50 transition-colors";
+                tr.innerHTML = `
+                    <td class="px-6 py-4 text-white font-medium">${file.name}</td>
+                    <td class="px-6 py-4 text-secondary font-code text-xs">${file.marketCategory}</td>
+                    <td class="px-6 py-4 ${
+                        file.pouScore > 50
+                            ? "text-indicator-ok"
+                            : "text-red-400"
+                    } font-code text-xs">${file.pouScore}%</td>
+                    <td class="px-6 py-4">
+                        <span class="${
+                            isAllocated ? "bg-indicator-ok" : "bg-gray-500"
+                        } text-black px-2 py-1 rounded text-[10px] font-semibold">
+                            ${isAllocated ? "ALLOCATED" : "FREE"}
+                        </span>
+                    </td>
+                `;
+                tbody.prepend(tr);
+            });
+            feather.replace();
+        },
+        renderLedger: () => {
+            if (!userId) return;
+            const container = document.getElementById("ledger-list");
+            container.innerHTML =
+                '<div class="text-center text-secondary p-5">Loading Ledger...</div>';
+
+            const ledgerColRef = firebase.collection(
+                db,
+                "artifacts",
+                APP_ID,
+                "users",
+                userId,
+                "userLedger"
+            );
+            const q = firebase.query(ledgerColRef, firebase.orderBy("timestamp", "desc"));
+
+            firebase.onSnapshot(q, (snapshot) => {
+                container.innerHTML = "";
+                if (snapshot.empty) {
+                    container.innerHTML =
+                        '<div class="text-center text-secondary p-5">Ledger is empty.</div>';
+                    return;
+                }
+                const ledgerData = [];
+                snapshot.docs.forEach((docSnap) => {
+                    const block = docSnap.data();
+                    ledgerData.push(block);
+                    const div = document.createElement("div");
+                    const isYield =
+                        block.type === "YIELD" ||
+                        (block.action || "").startsWith("SALE");
+                    const isDeposit =
+                        block.type === "POD" ||
+                        (block.action || "").startsWith("DEPOSIT");
+
+                    div.className =
+                        "ledger-entry p-4 rounded font-code text-xs space-y-2 fade-in";
+                    div.innerHTML = `
+                        <div class="flex justify-between text-zinc-500">
+                            <span>TYPE: ${block.type || "TX"}</span>
+                            <span>${
+                                block.timestamp
+                                    ? new Date(
+                                          block.timestamp.toDate()
+                                      ).toLocaleString()
+                                    : "Pending..."
+                            }</span>
+                        </div>
+                        <div class="${
+                            isYield
+                                ? "text-indicator-ok"
+                                : isDeposit
+                                ? "text-accent"
+                                : "text-primary"
+                        } truncate">
+                            ACTION: ${block.action || ""} ${
+                        block.details
+                            ? `— ${block.details}`
+                            : ""
+                    }
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+
+                // optional: render PoU chart if we have a canvas
+                if (document.getElementById("vaultChart")) {
+                    UI.renderChart(ledgerData);
+                }
+            });
+        },
+        renderDataFunds: () => {
+            const container = document.getElementById("data-funds-list");
+            container.innerHTML = "";
+
+            if (WorldState.dataFunds.length === 0) {
+                WorldState.dataFunds = [
+                    {
+                        id: "FinancialTaxFund",
+                        name: "Normalized Tax & Finance Fund",
+                        category: "Financial/Tax",
+                        requiredPoU: 70,
+                        currentYield: 12.5,
+                        description:
+                            "High-value fund for global CPA and wealth management analytics."
+                    },
+                    {
+                        id: "UrbanEVFund",
+                        name: "Urban EV Adopters Fund",
+                        category: "Urban/Mobility",
+                        requiredPoU: 30,
+                        currentYield: 4.8,
+                        description:
+                            "Mobility patterns for urban planning and automotive industry analysis."
+                    },
+                    {
+                        id: "RetailPulseFund",
+                        name: "Premium Retail Pulse Fund",
+                        category: "Retail/E-commerce",
+                        requiredPoU: 50,
+                        currentYield: 7.1,
+                        description:
+                            "Verified purchase intent data for consumer brands and market sizing."
+                    }
+                ];
+            }
+
+            WorldState.dataFunds.forEach((fund) => {
+                const isAllocated =
+                    userProfile.funds && userProfile.funds[fund.id];
+                const buttonText = isAllocated ? "DE-ALLOCATE" : "ALLOCATE ASSETS";
+                const buttonColor = isAllocated
+                    ? "bg-red-500 hover:bg-red-600"
+                    : "bg-accent hover:bg-opacity-80";
+
+                const card = document.createElement("div");
+                card.className =
+                    "bg-surface border border-theme p-5 rounded-lg flex flex-col justify-between";
+                card.innerHTML = `
+                    <div>
+                        <h4 class="text-xl font-semibold text-accent">${fund.name}</h4>
+                        <p class="text-xs text-secondary mb-2">${fund.category}</p>
+                        <p class="text-3xl font-code text-indicator-ok my-3">${fund.currentYield}% <span class="text-base text-secondary">Yield Target</span></p>
+                        <p class="text-sm text-secondary">${fund.description}</p>
                     </div>
-                    <div class="${contentClasses} border rounded-lg p-4 max-w-2xl text-sm leading-relaxed shadow-sm">
-                        ${formattedText}
+                    <div class="mt-4 pt-3 border-t border-zinc-700 flex justify-between items-center">
+                        <span class="text-xs text-secondary">Min PoU: ${fund.requiredPoU}%</span>
+                        <button onclick="DataFunds.toggleFundAllocation('${
+                            fund.id
+                        }', ${!isAllocated})"
+                            class="text-sm text-white px-3 py-1 rounded font-medium transition-colors ${buttonColor}"
+                            ${
+                                userType !== "individual" ? "disabled" : ""
+                            }>
+                            ${
+                                userType === "individual"
+                                    ? buttonText
+                                    : "B2B ACCESS"
+                            }
+                        </button>
                     </div>
                 `;
-                container.appendChild(div);
-                container.scrollTop = container.scrollHeight;
-                feather.replace();
+                container.appendChild(card);
+            });
+        },
+        renderYieldPortfolio: () => {
+            const tbody = document.getElementById("yield-portfolio-list");
+            tbody.innerHTML = "";
+
+            const activeFunds = userProfile.funds || {};
+            const fundIds = Object.keys(activeFunds);
+
+            if (fundIds.length === 0) {
+                tbody.innerHTML =
+                    '<tr><td colspan="4" class="px-6 py-4 text-center text-secondary">You are not currently allocated to any fund.</td></tr>';
+                return;
             }
-        };
 
-        const UI = window.UI = {
-            enableApp: () => {
-                document.querySelectorAll('.view-section').forEach(el => el.style.pointerEvents = 'auto');
-                document.getElementById('user-display').innerText = `User: ${auth.currentUser.email || auth.currentUser.uid.substring(0, 8)} | Type: ${userType}`;
-            },
-            disableApp: () => {
-                document.querySelectorAll('.view-section').forEach(el => el.style.pointerEvents = 'none');
-            },
-            updateHeader: () => {
-                const totalYield = (userProfile.totalYield || []).reduce((sum, item) => sum + item.amount, 0);
-                document.getElementById('dash-yield').innerText = `\$${totalYield.toFixed(2)}`;
-                document.getElementById('dash-funds-count').innerText = Object.keys(userProfile.funds || {}).length;
-                document.getElementById('current-user-type').innerText = userType === 'company' ? 'Enterprise' : 'Individual';
-            },
-            renderVault: async () => {
-                const tbody = document.getElementById('vault-list');
-                tbody.innerHTML = ''; 
+            let totalYieldValue = 0;
 
-                const files = await LocalDB.getAllFiles();
+            fundIds.forEach((fundId) => {
+                const fund = WorldState.dataFunds.find((f) => f.id === fundId);
+                const userData = activeFunds[fundId];
+                if (!fund) return;
 
-                if (files.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-12 text-center text-secondary">Vault is empty. Deposit files to initialize local encryption.</td></tr>';
-                    return;
-                }
+                const lastPayout = (Math.random() * 50 + 10).toFixed(2);
+                totalYieldValue += parseFloat(lastPayout);
 
-                files.forEach(file => {
-                    const isAllocated = Object.keys(userProfile.funds || {}).some(fundId => 
-                        file.marketCategory === 'Financial/Tax' && userProfile.funds[fundId]
-                    );
-                    
-                    const tr = document.createElement('tr');
-                    tr.className = 'hover:bg-zinc-900/50 transition-colors';
-                    tr.innerHTML = `
-                        <td class="px-6 py-4 text-white font-medium">${file.name}</td>
-                        <td class="px-6 py-4 text-secondary font-code text-xs">${file.marketCategory}</td>
-                        <td class="px-6 py-4 ${file.pouScore > 50 ? 'text-indicator-ok' : 'text-red-400'} font-code text-xs">${file.pouScore}%</td>
-                        <td class="px-6 py-4">
-                            <span class="${isAllocated ? 'bg-indicator-ok' : 'bg-gray-500'} text-black px-2 py-1 rounded text-[10px] font-semibold">
-                                ${isAllocated ? 'ALLOCATED' : 'FREE'}
-                            </span>
-                        </td>
-                    `;
-                    tbody.prepend(tr);
-                });
-                feather.replace();
-            },
-            renderLedger: () => {
-                if (!userId) return;
-                const container = document.getElementById('ledger-list');
-                container.innerHTML = '<div class="text-center text-secondary p-5">Loading Ledger...</div>';
-                
-                const ledgerColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
-                const q = firebase.query(ledgerColRef, firebase.orderBy("timestamp", "desc"));
+                const tr = document.createElement("tr");
+                tr.className = "hover:bg-zinc-900/50 transition-colors";
+                tr.innerHTML = `
+                    <td class="px-6 py-4 text-white font-medium">${fund.name}</td>
+                    <td class="px-6 py-4 text-secondary font-code">${
+                        userData.assetCount
+                    } Assets</td>
+                    <td class="px-6 py-4 text-indicator-warn font-code">$${lastPayout}</td>
+                    <td class="px-6 py-4">
+                        <button onclick="DataFunds.toggleFundAllocation('${fundId}', false)" class="bg-red-500 text-white px-3 py-1 rounded text-xs font-semibold">
+                            De-Allocate
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
 
-                firebase.onSnapshot(q, (snapshot) => {
-                    container.innerHTML = '';
-                    if (snapshot.empty) {
-                        container.innerHTML = '<div class="text-center text-secondary p-5">Ledger is empty.</div>';
-                        return;
-                    }
-                    snapshot.docs.forEach(docSnap => {
-                        const block = docSnap.data();
-                        const div = document.createElement('div');
-                        const isYield = block.type === 'YIELD' || block.action.startsWith('SALE');
-                        const isDeposit = block.type === 'POD' || block.action.startsWith('DEPOSIT');
-                        
-                        div.className = "ledger-entry p-4 rounded font-code text-xs space-y-2 fade-in";
-                        div.innerHTML = `
-                            <div class="flex justify-between text-zinc-500">
-                                <span>TYPE: ${block.type || 'TX'}</span>
-                                <span>${block.timestamp ? new Date(block.timestamp.toDate()).toLocaleString() : 'Pending...'}</span>
-                            </div>
-                            <div class="${isYield ? 'text-indicator-ok' : isDeposit ? 'text-accent' : 'text-primary'} truncate">
-                                ACTION: ${block.action} ${block.details ? `— ${block.details}` : ''}
-                            </div>
-                        `;
-                        container.appendChild(div);
-                    });
-                    // Re-render chart after ledger load
-                    UI.renderChart(snapshot.docs.map(doc => doc.data()));
-                });
-            },
-            renderDataFunds: () => {
-                const container = document.getElementById('data-funds-list');
-                container.innerHTML = '';
+            const lifetimeYield = (userProfile.totalYield || []).reduce(
+                (sum, item) => sum + (item.amount || 0),
+                0
+            );
+            document.getElementById(
+                "dash-yield"
+            ).innerText = `$${(lifetimeYield + totalYieldValue).toFixed(2)}`;
+            document.getElementById("dash-funds-count").innerText =
+                fundIds.length;
+        },
+        renderChart: (ledgerData) => {
+            const canvas = document.getElementById("vaultChart");
+            if (!canvas) return;
+            const ctx = canvas.getContext("2d");
 
-                // ⚠️ FIX: Ensure default funds exist if Firestore is empty/unavailable
-                if (WorldState.dataFunds.length === 0) {
-                    WorldState.dataFunds = [
-                        { id: 'FinancialTaxFund', name: 'Normalized Tax & Finance Fund', category: 'Financial/Tax', requiredPoU: 70, currentYield: 12.5, description: 'High-value fund for global CPA and wealth management analytics.' },
-                        { id: 'UrbanEVFund', name: 'Urban EV Adopters Fund', category: 'Urban/Mobility', requiredPoU: 30, currentYield: 4.8, description: 'Mobility patterns for urban planning and automotive industry analysis.' },
-                        { id: 'RetailPulseFund', name: 'Premium Retail Pulse Fund', category: 'Retail/E-commerce', requiredPoU: 50, currentYield: 7.1, description: 'Verified purchase intent data for consumer brands and market sizing.' }
-                    ];
-                }
-                
-                WorldState.dataFunds.forEach(fund => {
-                    const isAllocated = userProfile.funds && userProfile.funds[fund.id];
-                    const buttonText = isAllocated ? 'DE-ALLOCATE' : 'ALLOCATE ASSETS';
-                    const buttonColor = isAllocated ? 'bg-red-500 hover:bg-red-600' : 'bg-accent hover:bg-opacity-80';
+            const pouBlocks = (ledgerData || []).filter((b) =>
+                (b.action || "").startsWith("POU")
+            );
+            const pouDates = pouBlocks.map((b) =>
+                b.timestamp
+                    ? new Date(b.timestamp.toDate()).toLocaleDateString()
+                    : "Pending"
+            );
 
-                    const card = document.createElement('div');
-                    card.className = "bg-surface border border-theme p-5 rounded-lg flex flex-col justify-between";
-                    card.innerHTML = `
-                        <div>
-                            <h4 class="text-xl font-semibold text-accent">${fund.name}</h4>
-                            <p class="text-xs text-secondary mb-2">${fund.category}</p>
-                            <p class="text-3xl font-code text-indicator-ok my-3">${fund.currentYield}% <span class="text-base text-secondary">Yield Target</span></p>
-                            <p class="text-sm text-secondary">${fund.description}</p>
-                        </div>
-                        <div class="mt-4 pt-3 border-t border-zinc-700 flex justify-between items-center">
-                            <span class="text-xs text-secondary">Min PoU: ${fund.requiredPoU}%</span>
-                            <button onclick="DataFunds.toggleFundAllocation('${fund.id}', ${!isAllocated})"
-                                class="text-sm text-white px-3 py-1 rounded font-medium transition-colors ${buttonColor}"
-                                ${userType !== 'individual' ? 'disabled' : ''}>
-                                ${userType === 'individual' ? buttonText : 'B2B ACCESS'}
-                            </button>
-                        </div>
-                    `;
-                    container.appendChild(card);
-                });
-            },
-            renderYieldPortfolio: () => {
-                const tbody = document.getElementById('yield-portfolio-list');
-                tbody.innerHTML = '';
-                
-                const activeFunds = userProfile.funds || {};
-                const fundIds = Object.keys(activeFunds);
-                
-                if (fundIds.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-secondary">You are not currently allocated to any fund.</td></tr>';
-                    return;
-                }
-                
-                let totalYieldValue = 0;
-                
-                fundIds.forEach(fundId => {
-                    const fund = WorldState.dataFunds.find(f => f.id === fundId);
-                    const userData = activeFunds[fundId];
-                    if (!fund) return;
-                    
-                    const lastPayout = (Math.random() * 50 + 10).toFixed(2);
-                    totalYieldValue += parseFloat(lastPayout);
+            const counts = pouDates.reduce((acc, date) => {
+                acc[date] = (acc[date] || 0) + 1;
+                return acc;
+            }, {});
 
-                    const tr = document.createElement('tr');
-                    tr.className = 'hover:bg-zinc-900/50 transition-colors';
-                    tr.innerHTML = `
-                        <td class="px-6 py-4 text-white font-medium">${fund.name}</td>
-                        <td class="px-6 py-4 text-secondary font-code">${userData.assetCount} Assets</td>
-                        <td class="px-6 py-4 text-indicator-warn font-code">\ $${lastPayout}</td>
-                        <td class="px-6 py-4">
-                            <button onclick="DataFunds.toggleFundAllocation('${fundId}', false)" class="bg-red-500 text-white px-3 py-1 rounded text-xs font-semibold">
-                                De-Allocate
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                });
+            let cumulative = 0;
+            const labels = Object.keys(counts).sort(
+                (a, b) => new Date(a) - new Date(b)
+            );
+            const data = labels.map((date) => (cumulative += counts[date]));
 
-                // The original script already correctly aggregates the static (random) yield with the lifetime yield for display.
-                const lifetimeYield = (userProfile.totalYield || []).reduce((sum, item) => sum + item.amount, 0);
-                document.getElementById('dash-yield').innerText = `\$${(lifetimeYield + totalYieldValue).toFixed(2)}`;
-                document.getElementById('dash-funds-count').innerText = fundIds.length;
-            },
-            
-            renderChart: (ledgerData) => {
-                const ctx = document.getElementById('vaultChart').getContext('2d');
-                
-                const pouDates = ledgerData
-                    .filter(b => b.action.startsWith('POU'))
-                    .map(b => (b.timestamp ? new Date(b.timestamp.toDate()).toLocaleDateString() : 'Pending'));
+            if (window.vaultChartInstance) window.vaultChartInstance.destroy();
 
-                const counts = pouDates.reduce((acc, date) => { acc[date] = (acc[date] || 0) + 1; return acc; }, {});
-
-                let cumulative = 0;
-                const labels = Object.keys(counts).sort();
-                const data = labels.map(date => cumulative += counts[date]);
-
-                if (window.vaultChartInstance) window.vaultChartInstance.destroy();
-
-                window.vaultChartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Cumulative PoU Blocks',
+            window.vaultChartInstance = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: "Cumulative PoU Blocks",
                             data: data,
-                            // ⚠️ FIX: Use 'var(--accent)' which is a valid CSS string
-                            borderColor: 'var(--accent)', 
-                            backgroundColor: 'rgba(6, 182, 212, 0.2)',
+                            borderColor: "var(--accent)",
+                            backgroundColor: "rgba(6, 182, 212, 0.2)",
                             tension: 0.3,
-                            fill: true,
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: {
-                            y: { beginAtZero: true, grid: { color: 'rgba(71, 85, 105, 0.5)' }, ticks: { color: 'var(--text-sec)' } },
-                            x: { grid: { display: false }, ticks: { color: 'var(--text-sec)' } }
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: "rgba(71, 85, 105, 0.5)" },
+                            ticks: { color: "var(--text-sec)" }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: "var(--text-sec)" }
                         }
                     }
-                });
-            }
-        };
-        
-        // --- INITIALIZATION BLOCK (Executes after module load) ---
-        window.onload = async () => {
-            feather.replace(); 
-            await LocalDB.init();
-            await FirebaseInit.setup();
-            Router.nav('dashboard', document.querySelector('.nav-item.active'));
-
-            document.getElementById('ai-input').addEventListener('keypress', function (e) {
-                if (e.key === 'Enter') AI.send();
+                }
             });
-            document.getElementById('auth-password').addEventListener('keypress', function (e) {
-                if (e.key === 'Enter') Auth.signIn();
+        }
+    });
+
+    // --- INITIALIZATION BLOCK (Executes after module load) ---
+    window.onload = async () => {
+        feather.replace();
+        await LocalDB.init();
+        await FirebaseInit.setup();
+        Router.nav("dashboard", document.querySelector(".nav-item.active"));
+
+        const aiInput = document.getElementById("ai-input");
+        if (aiInput) {
+            aiInput.addEventListener("keypress", function (e) {
+                if (e.key === "Enter") AI.send();
             });
-        };
-    </script>
-</head>
-<body class="flex bg-os">
+        }
 
-    <div id="auth-overlay" class="fixed inset-0 flex items-center justify-center p-4 text-primary">
-        <div class="bg-panel border border-theme p-8 rounded-lg w-full max-w-md shadow-2xl fade-in">
-            <h2 class="text-2xl font-bold mb-6 text-accent" id="auth-title">Welcome to WorldOS</h2>
-            <p class="text-secondary mb-6 text-sm">Please sign in to access your Sovereign Node and Data Portfolio.</p>
-            
-            <input type="text" id="auth-email" placeholder="Email" class="w-full bg-surface border border-theme p-3 rounded mb-3 focus:ring-accent focus:border-accent">
-            <input type="password" id="auth-password" placeholder="Password" class="w-full bg-surface border border-theme p-3 rounded mb-4 focus:ring-accent focus:border-accent">
-            
-            <select id="auth-user-type" class="w-full bg-surface border border-theme p-3 rounded mb-4 text-secondary focus:ring-accent focus:border-accent">
-                <option value="individual">Individual Data Sovereign (Yield Earner)</option>
-                <option value="company">Enterprise Data Buyer (SDA/SaaS Client)</option>
-            </select>
-
-            <button onclick="Auth.signIn()" class="w-full bg-accent text-accent-inv font-semibold p-3 rounded mb-2 hover:bg-opacity-80 transition-opacity">
-                Sign In
-            </button>
-            <button onclick="Auth.signUp()" class="w-full bg-surface text-primary border border-theme font-medium p-3 rounded hover:bg-theme-panel transition-colors">
-                Register New Account
-            </button>
-            
-            <p id="auth-error" class="text-red-500 text-sm mt-3 h-5"></p>
-        </div>
-    </div>
-
-    <aside class="w-60 bg-panel border-r border-theme flex flex-col z-20 h-full shrink-0">
-        <div class="p-6 flex items-center gap-3 select-none border-b border-theme">
-            <i data-feather="hexagon" class="text-accent"></i>
-            <div>
-                <h1 class="font-bold tracking-tight text-lg leading-none font-code text-primary">DATA<span class="opacity-50">OS</span></h1>
-                <span class="text-[10px] text-secondary font-code uppercase tracking-widest">Sovereign Funds</span>
-            </div>
-        </div>
-
-        <nav class="flex-1 px-4 py-4 space-y-1">
-            <button onclick="Router.nav('dashboard', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium active">
-                <i data-feather="grid" class="w-4 h-4"></i> Dashboard
-            </button>
-            <button onclick="Router.nav('intelligence', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
-                <i data-feather="cpu" class="w-4 h-4"></i> Neural Core (PoU)
-            </button>
-            <button onclick="Router.nav('vault', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
-                <i data-feather="database" class="w-4 h-4"></i> Data Vault
-            </button>
-            <button onclick="Router.nav('marketplace', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
-                <i data-feather="dollar-sign" class="w-4 h-4 text-indicator-warn"></i> Data Funds & Yield
-            </button>
-            <button onclick="Router.nav('ledger', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
-                <i data-feather="list" class="w-4 h-4"></i> Transaction Ledger
-            </button>
-        </nav>
-
-        <div class="p-4 border-t border-theme">
-             <button onclick="Auth.signOut()" class="w-full text-secondary hover:text-red-400 text-sm flex items-center gap-2 transition-colors">
-                <i data-feather="log-out" class="w-4 h-4"></i> Sign Out
-            </button>
-            <p class="text-[10px] text-zinc-600 mt-2 font-code truncate" id="user-display">User: Guest | Type: None</p>
-        </div>
-    </aside>
-
-    <div id="main" class="flex-1 flex flex-col relative bg-os overflow-hidden"> 
-        <header class="h-14 border-b border-theme flex items-center justify-between px-6 sticky top-0 bg-panel/80 backdrop-blur-sm z-10 shrink-0">
-            <div class="text-xs font-code text-secondary">
-                <span id="current-user-type">Individual</span> Node ~ <span class="text-primary" id="breadcrumb">/dashboard</span>
-            </div>
-            <div class="flex items-center gap-4">
-                <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-theme">
-                    <i data-feather="server" class="w-3 h-3 text-secondary"></i>
-                    <span class="text-xs font-code text-primary" id="storage-usage">0 MB</span>
-                </div>
-            </div>
-        </header>
-
-        <div class="flex-1 relative">
-            
-            <div id="view-dashboard" class="view-section absolute inset-0 p-8 fade-in active">
-                <h2 class="text-2xl font-medium mb-6 text-accent">Data Fund Portfolio Summary</h2>
-                
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div class="bg-surface border border-theme p-5 rounded-lg">
-                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Total Yield Earned</div>
-                        <div class="text-3xl font-code text-indicator-ok" id="dash-yield">$0.00</div>
-                        <div class="mt-2 text-xs text-secondary">Lifetime Royalties (Post-Commission)</div>
-                    </div>
-                    <div class="bg-surface border border-theme p-5 rounded-lg">
-                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Fund Allocation</div>
-                        <div class="text-3xl font-code text-primary" id="dash-funds-count">0</div>
-                        <div class="mt-2 text-xs text-secondary">Active Funds Contributed To</div>
-                    </div>
-                    <div class="bg-surface border border-theme p-5 rounded-lg">
-                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Verified Utility Score (PoU)</div>
-                        <div class="text-3xl font-code text-primary text-accent" id="dash-pou-score">0%</div>
-                        <div class="mt-2 text-xs text-secondary">Average PoU of Listed Assets</div>
-                    </div>
-                </div>
-
-                <div class="bg-surface border border-theme rounded-lg p-6 mb-8">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-medium">Proof of Utility (PoU) Activity</h3>
-                        <span class="text-xs text-secondary font-code">LOCAL RAG INFERENCE</span>
-                    </div>
-                    <div class="h-48">
-                        <canvas id="vaultChart"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <div id="view-ledger" class="view-section absolute inset-0 hidden p-8 fade-in">
-                <h2 class="text-2xl font-medium mb-6 text-accent">Transaction Ledger (PoD & Yield) ⛓️</h2>
-                <div class="space-y-2" id="ledger-list">
-                    </div>
-            </div>
-            
-            <div id="view-marketplace" class="view-section absolute inset-0 hidden p-8 fade-in">
-                <h2 class="text-2xl font-medium mb-4 text-accent">Data Funds Index</h2>
-                <p class="text-secondary mb-6">Invest your data into thematic funds to earn passive, recurring yield (royalties).</p>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8" id="data-funds-list">
-                    </div>
-                
-                <h3 class="text-xl font-medium mt-8 mb-4 text-accent">My Yield Portfolio</h3>
-                <div class="bg-panel border border-theme rounded-lg overflow-hidden">
-                    <table class="w-full text-sm text-left">
-                        <thead class="bg-zinc-900/50 text-zinc-500 font-medium border-b border-theme">
-                            <tr>
-                                <th class="px-6 py-3">Fund Name</th>
-                                <th class="px-6 py-3">Your Allocation</th>
-                                <th class="px-6 py-3">Last Payout</th>
-                                <th class="px-6 py-3">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="yield-portfolio-list">
-                            <tr><td colspan="4" class="px-6 py-4 text-center text-secondary">You are not currently allocated to any fund.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="mt-6 flex justify-end">
-                    <button onclick="DataFunds.simulatePayout()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 transition-colors">
-                        Simulate B2B Payout (Company User Only)
-                    </button>
-                </div>
-            </div>
-            
-            <div id="view-intelligence" class="view-section absolute inset-0 hidden p-8">
-                <div class="flex flex-col h-full bg-panel border border-theme rounded-lg overflow-hidden">
-                    <div class="flex-1 p-5 font-code text-sm space-y-4" id="chat-history">
-                        <div class="flex items-start gap-4">
-                            <div class="w-8 h-8 rounded bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
-                                <i data-feather="cpu" class="w-4 h-4 text-indicator-ok"></i>
-                            </div>
-                            <div class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 max-w-2xl text-sm leading-relaxed text-zinc-300">
-                                <p><strong>Neural Core Online.</strong> Run RAG queries on your uploaded financial data (e.g., "Normalize all Q4 transactions").</p>
-                                <p class="mt-2">This generates **Proof of Utility (PoU)**, increasing your data's value for the Funds.</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="p-4 border-t border-theme bg-theme-panel shrink-0">
-                        <div class="max-w-4xl mx-auto relative">
-                            <input type="text" id="ai-input" placeholder="Query your local data..." class="w-full bg-zinc-900 border border-zinc-700 rounded-md py-3 pl-4 pr-12 text-sm text-white focus:ring-accent focus:border-accent">
-                            <button onclick="AI.send()" class="absolute right-2 top-2 p-1.5 hover:bg-zinc-800 rounded text-secondary hover:text-white transition-colors">
-                                <i data-feather="arrow-up" class="w-4 h-4"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="view-vault" class="view-section absolute inset-0 hidden p-8 fade-in">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-medium">Data Vault 🛡️</h2>
-                    <label class="cursor-pointer bg-accent text-accent-inv hover:bg-opacity-80 px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-2">
-                        <i data-feather="upload-cloud" class="w-4 h-4"></i> Deposit Financial Data
-                        <input type="file" class="hidden" id="file-upload" onchange="Vault.ingest(this)">
-                    </label>
-                </div>
-
-                <div class="bg-theme-surface border border-theme rounded-lg overflow-hidden">
-                    <table class="w-full text-sm text-left">
-                        <thead class="bg-zinc-900 text-zinc-500 font-medium border-b border-theme">
-                            <tr>
-                                <th class="px-6 py-3">Asset Name</th>
-                                <th class="px-6 py-3">Category</th>
-                                <th class="px-6 py-3">PoU Score</th>
-                                <th class="px-6 py-3">Allocation</th>
-                            </tr>
-                        </thead>
-                        <tbody id="vault-list" class="divide-y divide-zinc-800">
-                            </tbody>
-                    </table>
-                </div>
-            </div>
-
-        </div>
-    </div>
-</body>
-</html>
+        const authPassword = document.getElementById("auth-password");
+        if (authPassword) {
+            authPassword.addEventListener("keypress", function (e) {
+                if (e.key === "Enter") Auth.signIn();
+            });
+        }
+    };
+</script>
