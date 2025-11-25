@@ -3,648 +3,507 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WorldOS // Console</title>
+    <title>WorldOS // Sovereign Node</title>
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     
     <script src="https://unpkg.com/feather-icons"></script>
-
+    <script src="https://cdn.tailwindcss.com"></script>
+    
     <style>
-        /* --- DESIGN SYSTEM: "Zinc" Palette --- */
+        /* --- WORLD SKIN: DEFAULT (ZINC) --- */
         :root {
-            --bg-app: #09090b;
-            --bg-sidebar: #000000;
-            --bg-card: #121214;
-            --bg-input: #18181b;
-            --border: #27272a;
-            --border-highlight: #3f3f46;
+            --bg-os: #09090b; /* zinc-950 */
+            --bg-panel: #121214; /* zinc-900 */
+            --bg-surface: #18181b; /* zinc-800 */
+            --border: #27272a; /* zinc-700 */
             
-            --text-main: #f4f4f5;
-            --text-muted: #a1a1aa;
+            --text-pri: #f4f4f5; /* zinc-50 */
+            --text-sec: #a1a1aa; /* zinc-400 */
+            --text-mono: #d4d4d8; /* zinc-300 */
+
+            --accent: #fff;
+            --accent-inv: #000;
             
-            --primary: #fff;
-            --primary-inv: #000;
-            --accent: #22c55e; /* Success Green */
-            --danger: #ef4444;
+            --indicator-ok: #22c55e; /* emerald-500 */
+            --indicator-warn: #eab308; /* amber-500 */
             
-            --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            --font-mono: 'JetBrains Mono', monospace;
+            --font-ui: 'Inter', sans-serif;
+            --font-code: 'JetBrains Mono', monospace;
         }
 
-        /* --- RESET --- */
-        * { box-sizing: border-box; outline: none; }
-        body { margin: 0; padding: 0; background: var(--bg-app); color: var(--text-main); font-family: var(--font-ui); height: 100vh; overflow: hidden; display: flex; }
+        /* --- THEME: AMBER (CYBERPUNK) --- */
+        [data-skin="amber"] {
+            --bg-os: #0c0a00;
+            --bg-panel: #141100;
+            --bg-surface: #1f1a00;
+            --border: #332b00;
+            --text-pri: #ffcc00;
+            --text-sec: #997a00;
+            --text-mono: #ffcc00;
+            --accent: #ffcc00;
+            --accent-inv: #0c0a00;
+            --indicator-ok: #ffcc00;
+        }
+
+        /* --- THEME: SLATE (CLEAN) --- */
+        [data-skin="slate"] {
+            --bg-os: #0f172a; /* slate-900 */
+            --bg-panel: #1e293b; /* slate-800 */
+            --bg-surface: #334155; /* slate-700 */
+            --border: #475569; /* slate-600 */
+            --text-pri: #f8fafc; /* slate-50 */
+            --text-sec: #94a3b8; /* slate-400 */
+            --accent: #38bdf8; /* sky-400 */
+            --accent-inv: #0f172a;
+        }
+
+        /* --- CORE OS RESET & LAYOUT --- */
+        * { box-sizing: border-box; outline: none; user-select: none; }
+        body { 
+            margin: 0; 
+            background: var(--bg-os); 
+            color: var(--text-pri); 
+            font-family: var(--font-ui); 
+            height: 100vh; 
+            overflow: hidden; 
+            display: flex; 
+            transition: background 0.3s ease; 
+        }
+        input, textarea { user-select: text; }
+
+        /* Custom utility classes based on theme vars */
+        .bg-os { background-color: var(--bg-os); }
+        .bg-panel { background-color: var(--bg-panel); }
+        .bg-surface { background-color: var(--bg-surface); }
+        .border-theme { border-color: var(--border); }
+        .text-primary { color: var(--text-pri); }
+        .text-secondary { color: var(--text-sec); }
+        .text-mono { color: var(--text-mono); }
+        .text-accent { color: var(--accent); }
+        .bg-accent { background-color: var(--accent); color: var(--accent-inv); }
+        .indicator-ok { background-color: var(--indicator-ok); box-shadow: 0 0 10px var(--indicator-ok); }
+        .font-code { font-family: var(--font-code); }
         
-        /* --- TYPOGRAPHY --- */
-        h1, h2, h3 { font-weight: 500; letter-spacing: -0.02em; margin: 0; }
-        .mono { font-family: var(--font-mono); font-size: 0.85em; }
-        .text-sm { font-size: 0.875rem; }
-        .text-xs { font-size: 0.75rem; }
-        .text-muted { color: var(--text-muted); }
-
-        /* --- LAYOUT: SIDEBAR --- */
-        aside {
-            width: 260px;
-            background: var(--bg-sidebar);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            padding: 1.5rem;
-            z-index: 10;
-        }
-
-        .brand {
-            font-family: var(--font-mono);
-            font-weight: 600;
-            font-size: 1rem;
-            margin-bottom: 2rem;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .brand span { color: var(--text-muted); }
-
-        nav button {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            width: 100%;
-            padding: 10px 12px;
-            text-align: left;
-            border-radius: 6px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 0.9rem;
-            font-weight: 500;
-            margin-bottom: 4px;
-            transition: 0.15s;
-        }
-
-        nav button:hover { background: var(--bg-card); color: var(--text-main); }
-        nav button.active { background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border); }
-        
-        .nav-footer { margin-top: auto; border-top: 1px solid var(--border); padding-top: 1rem; }
-
-        /* --- LAYOUT: MAIN --- */
-        main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            position: relative;
-        }
-
-        header {
-            height: 60px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 2rem;
-            background: rgba(9, 9, 11, 0.8);
-            backdrop-filter: blur(8px);
-        }
-
-        .breadcrumbs { color: var(--text-muted); font-size: 0.875rem; }
-        .breadcrumbs span { color: var(--text-main); font-weight: 500; }
-
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.75rem;
-            background: var(--bg-input);
-            padding: 4px 10px;
-            border-radius: 20px;
-            border: 1px solid var(--border);
-        }
-        .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-
-        /* --- CONTENT VIEWS --- */
-        .view {
-            padding: 2rem;
-            overflow-y: auto;
-            height: 100%;
-            display: none; /* Hidden by default */
-        }
-        .view.active { display: block; animation: fadeIn 0.3s ease; }
-
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* --- DASHBOARD GRID --- */
-        .grid-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            padding: 1.5rem;
-            border-radius: 8px;
-        }
-
-        .stat-label { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
-        .stat-value { font-size: 2rem; font-weight: 500; letter-spacing: -1px; }
-
-        /* --- TABLES --- */
-        .table-container {
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th { background: var(--bg-input); text-align: left; padding: 12px 16px; color: var(--text-muted); font-weight: 500; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
-        td { padding: 16px; border-bottom: 1px solid var(--border); color: var(--text-main); }
-        tr:last-child td { border-bottom: none; }
-        .hash-mono { font-family: var(--font-mono); color: var(--text-muted); font-size: 0.8rem; }
-        .status-pill {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        .status-pill.success { background: rgba(34, 197, 94, 0.2); color: var(--accent); }
-        .status-pill.info { background: rgba(99, 102, 241, 0.2); color: #6366f1; }
-
-
-        /* --- INTELLIGENCE (CHAT) --- */
-        .chat-layout {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        .chat-window {
-            flex: 1;
-            overflow-y: auto;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            background: var(--bg-card);
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .message { display: flex; flex-direction: column; gap: 0.5rem; max-width: 90%; }
-        .message.user { align-self: flex-end; align-items: flex-end; }
-        .message.ai { align-self: flex-start; align-items: flex-start; }
-        
-        .bubble {
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            line-height: 1.6;
-        }
-        .user .bubble { background: var(--text-main); color: var(--primary-inv); }
-        .ai .bubble { background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); }
-        
-        .input-area {
-            display: flex;
-            gap: 1rem;
-            background: var(--bg-input);
-            padding: 10px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-        }
-
-        textarea {
-            flex: 1;
-            background: transparent;
-            border: none;
-            color: white;
-            resize: none;
-            font-family: var(--font-ui);
-            font-size: 0.95rem;
-            padding: 8px;
-            height: 40px;
-        }
-
-        .btn-send {
-            background: var(--text-main);
-            color: black;
-            border: none;
-            border-radius: 6px;
-            padding: 0 20px;
-            font-weight: 600;
-            cursor: pointer;
+        /* Sidebar Item Styling (Combining Code 1 hover & Code 2 active) */
+        .nav-item {
+            color: var(--text-sec);
             transition: 0.2s;
         }
-        .btn-send:hover { opacity: 0.9; }
-        .btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        /* --- MODAL (API KEY) --- */
-        .api-warning {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-            color: #fca5a5;
-            padding: 1rem;
-            border-radius: 6px;
-            margin-bottom: 1rem;
-            font-size: 0.9rem;
+        .nav-item:hover, .nav-item.active { 
+            background: var(--bg-surface); 
+            color: var(--text-pri); 
         }
 
-        input[type="password"] {
-            width: 100%;
-            background: var(--bg-app);
-            border: 1px solid var(--border);
-            padding: 12px;
-            color: white;
-            border-radius: 6px;
-            font-family: var(--font-mono);
-            margin-bottom: 1rem;
-        }
-        /* Style for the file input in the vault view */
-        .deposit-button-container {
-            display:flex; 
-            justify-content:space-between; 
-            align-items:center; 
-            margin-bottom:2rem;
-        }
+        /* Animations */
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.1); } 70% { box-shadow: 0 0 0 6px rgba(0,0,0,0); } 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        
+        /* Terminal / Chat specific styles */
+        .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-inv); max-width: 80%; }
+        .msg.system { align-self: flex-start; border: 1px solid var(--border); color: var(--text-sec); font-size: 0.8rem; max-width: 80%; }
+        .msg.ai { align-self: flex-start; background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-pri); max-width: 80%; }
 
     </style>
 </head>
-<body>
+<body data-skin="default">
 
-    <aside>
-        <div class="brand">
-            <i data-feather="hexagon"></i>
-            WORLD<span>OS</span>
+    <aside class="w-60 bg-panel border-r border-theme flex flex-col z-20">
+        <div class="p-6 flex items-center gap-3 select-none border-b border-theme">
+            <i data-feather="hexagon" class="text-accent"></i>
+            <div>
+                <h1 class="font-bold tracking-tight text-lg leading-none font-code text-primary">WORLD<span class="opacity-50">OS</span></h1>
+                <span class="text-[10px] text-secondary font-code uppercase tracking-widest">Sovereign Node</span>
+            </div>
         </div>
-        
-        <nav>
-            <button id="nav-dashboard" class="nav-btn active" onclick="nav('dashboard')">
-                <i data-feather="grid"></i> Dashboard
+
+        <nav class="flex-1 px-4 py-4 space-y-1">
+            <button onclick="Router.nav('dashboard', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium active">
+                <i data-feather="grid" class="w-4 h-4"></i> Overview
             </button>
-            <button id="nav-intelligence" class="nav-btn" onclick="nav('intelligence')">
-                <i data-feather="cpu"></i> Intelligence
+            <button onclick="Router.nav('intelligence', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
+                <i data-feather="cpu" class="w-4 h-4"></i> Neural Core
             </button>
-            <button id="nav-vault" class="nav-btn" onclick="nav('vault')">
-                <i data-feather="database"></i> Data Vault
+            <button onclick="Router.nav('vault', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
+                <i data-feather="database" class="w-4 h-4"></i> Data Vault
+            </button>
+            <button onclick="Router.nav('ledger', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium">
+                <i data-feather="list" class="w-4 h-4"></i> Proof Ledger
             </button>
         </nav>
 
-        <div class="nav-footer">
-            <button id="nav-settings" class="nav-btn" onclick="nav('settings')">
-                <i data-feather="settings"></i> Settings
+        <div class="p-4 border-t border-theme">
+            <button onclick="Router.nav('settings', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium mb-4">
+                <i data-feather="settings" class="w-4 h-4"></i> Config
             </button>
+            <div class="flex items-center gap-3">
+                <div class="w-3 h-3 rounded-full indicator-ok animate-pulse"></div>
+                <span class="text-xs text-secondary font-code">LOCAL RUNTIME ACTIVE</span>
+            </div>
         </div>
     </aside>
 
-    <main>
-        <header>
-            <div class="breadcrumbs" id="breadcrumbs">WorldOS / <span>Dashboard</span></div>
-            <div class="status-indicator">
-                <div class="dot"></div>
-                <span class="mono">CONNECTED</span>
+    <div id="main" class="flex-1 flex flex-col relative bg-os">
+        
+        <header class="h-14 border-b border-theme flex items-center justify-between px-6 sticky top-0 bg-panel/80 backdrop-blur-sm z-10">
+            <div class="text-xs font-code text-secondary">
+                root@local-node ~ <span class="text-primary" id="breadcrumb">/dashboard</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-theme">
+                    <i data-feather="hard-drive" class="w-3 h-3 text-secondary"></i>
+                    <span class="text-xs font-code text-mono" id="dash-usage">0 MB</span>
+                </div>
+                <div class="w-7 h-7 rounded bg-gradient-to-br from-zinc-700 to-black border border-zinc-600"></div>
             </div>
         </header>
 
-        <div id="view-dashboard" class="view active">
-            <h2 style="margin-bottom: 1.5rem;">System Overview</h2>
+        <div class="flex-1 overflow-hidden relative">
             
-            <div class="grid-stats">
-                <div class="stat-card">
-                    <div class="stat-label">Total Deposits (on-chain)</div>
-                    <div class="stat-value" id="stat-deposits">12</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Storage Used</div>
-                    <div class="stat-value">42.8 <span class="text-muted text-sm">MB</span></div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Network Status</div>
-                    <div class="stat-value" style="color:var(--accent)">100%</div>
-                </div>
-            </div>
-
-            <h3 style="margin-bottom: 1rem;">Recent Proofs</h3>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>FILE NAME</th>
-                            <th>PROOF HASH</th>
-                            <th>TIMESTAMP</th>
-                        </tr>
-                    </thead>
-                    <tbody id="dash-table-body">
-                        </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div id="view-intelligence" class="view">
-            <div class="chat-layout">
-                <div style="margin-bottom: 1rem; display:flex; justify-content:space-between; align-items:center;">
-                    <h2>Neural Interface</h2>
-                    <span class="mono text-muted text-xs">MODEL: GEMINI-1.5-FLASH</span>
-                </div>
+            <div id="view-dashboard" class="view-section absolute inset-0 p-8 overflow-y-auto fade-in active">
+                <h2 class="text-2xl font-medium mb-6">System Overview 👋</h2>
                 
-                <div id="gemini-chat-window" class="chat-window">
-                    <div class="message ai">
-                        <div class="bubble">
-                            System initialized. I am WorldOS Intelligence. **NOTE:** This is a simulated environment. For real analysis, a secure **backend proxy** is required to handle API requests.
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-surface border border-theme p-5 rounded-lg">
+                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Vault Usage</div>
+                        <div class="text-3xl font-code text-primary" id="dash-usage-val">0 MB</div>
+                        <div class="mt-2 text-xs text-indicator-ok flex items-center gap-1">
+                            <i data-feather="lock" class="w-3 h-3 text-indicator-ok"></i> Local-First / Encrypted
                         </div>
                     </div>
-                </div>
-
-                <div class="input-area">
-                    <textarea id="ai-input" placeholder="Query the system... (e.g., 'Analyze the hash patterns', 'Draft a security protocol')"></textarea>
-                    <button id="ai-send" class="btn-send" style="display: flex; align-items: center; justify-content: center; height: 50px;"><i data-feather="arrow-up"></i></button>
-                </div>
-            </div>
-        </div>
-
-        <div id="view-vault" class="view">
-            <div class="deposit-button-container">
-                <h2>Data Vault (Blockchain Proofs)</h2>
-                <button class="btn-send" style="height:40px;" onclick="document.getElementById('file-upload').click()">+ Deposit File</button>
-                <input type="file" id="file-upload" style="display:none">
-            </div>
-
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>FILE NAME</th>
-                            <th>SIZE</th>
-                            <th>ENCRYPTION</th>
-                            <th>PROOF HASH</th>
-                        </tr>
-                    </thead>
-                    <tbody id="vault-table-body">
-                        </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div id="view-settings" class="view">
-            <div style="max-width: 500px;">
-                <h2 style="margin-bottom: 2rem;">Configuration</h2>
-                
-                <div class="stat-card">
-                    <h3 style="margin-bottom: 1rem;">Gemini API Integration</h3>
-                    <p class="text-muted text-sm" style="margin-bottom: 1rem;">
-                        WorldOS requires a Google Gemini API key to perform neural analysis. **SECURITY WARNING: In a real deployment, this key must be handled by a secure backend server, not the browser.**
-                    </p>
-                    
-                    <div class="api-warning">
-                        <i data-feather="alert-triangle" style="width:14px; vertical-align:middle"></i>
-                        Security Note: Never share this key publicly.
+                    <div class="bg-surface border border-theme p-5 rounded-lg">
+                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">Ledger Height</div>
+                        <div class="text-3xl font-code text-primary" id="dash-ledger">0</div>
+                        <div class="mt-2 text-xs text-secondary">Proof-of-Deposit Blocks</div>
                     </div>
+                    <div class="bg-surface border border-theme p-5 rounded-lg">
+                        <div class="text-secondary text-xs font-code uppercase tracking-widest mb-2">AI Status</div>
+                        <div class="text-2xl font-medium text-primary mt-1">READY (SIM)</div>
+                        <div class="mt-2 text-xs text-secondary">No API Key Req</div>
+                    </div>
+                </div>
 
-                    <label class="stat-label">API Key</label>
-                    <input type="password" id="api-key-input" placeholder="Paste key here (AIzaSy...)">
-                    <button id="save-key-btn" class="btn-send" style="width:100%; padding: 12px 0;">Save Configuration</button>
-                    <p id="key-status" class="mono text-xs" style="margin-top:10px; color:var(--accent); display:none;">KEY SAVED SECURELY (in session)</p>
+                <div class="bg-surface border border-theme rounded-lg p-6 mb-8">
+                    <h3 class="text-lg font-medium mb-3">Recent Activity</h3>
+                    <div id="activity-log" class="font-code text-sm text-secondary space-y-1">
+                        <div><span class="opacity-50">[SYSTEM]</span> Node initialized. Waiting for input...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-intelligence" class="view-section absolute inset-0 hidden p-8">
+                <div class="flex flex-col h-full bg-panel border border-theme rounded-lg overflow-hidden">
+                    <div class="flex-1 p-5 overflow-y-auto font-code text-sm space-y-4" id="chat-history">
+                        <div class="msg system p-3 rounded-lg">
+                            WorldOS Neural Core v1.0 initialized.<br>
+                            Running in **Sovereign Mode** (Local Simulation).<br>
+                            No data leaves this device. No API keys required.
+                        </div>
+                        <div class="msg ai p-3 rounded-lg">
+                            I am your local intelligence. I have access to your Vault and Ledger. How can I assist you with your data today?
+                        </div>
+                    </div>
+                    <div class="p-4 bg-surface border-t border-theme flex gap-3">
+                        <input type="text" class="flex-1 bg-transparent border border-theme rounded-md px-3 text-primary font-ui text-base" id="chat-input" placeholder="Query your world..." autocomplete="off">
+                        <button class="bg-accent text-accent-inv px-5 py-2 rounded-md font-semibold text-sm" onclick="AI.send()">EXECUTE</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-vault" class="view-section absolute inset-0 hidden p-8 overflow-y-auto fade-in">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-2xl font-medium">Data Vault 🛡️</h1>
+                    <button class="bg-accent text-accent-inv px-5 py-2 rounded-md font-semibold text-sm" onclick="document.getElementById('file-upload').click()">+ Deposit File</button>
+                    <input type="file" id="file-upload" hidden onchange="Vault.ingest(this)">
+                </div>
+                
+                <div class="bg-panel border border-theme rounded-lg overflow-hidden">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left bg-surface border-b border-theme text-secondary font-code uppercase text-xs">
+                                <th class="p-4">FILENAME</th>
+                                <th class="p-4">SIZE</th>
+                                <th class="p-4">ENCRYPTION</th>
+                                <th class="p-4">TYPE</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vault-list">
+                            <tr><td colspan="4" class="text-center p-5 text-secondary">Vault is empty. Deposit your first file.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="view-ledger" class="view-section absolute inset-0 hidden p-8 overflow-y-auto fade-in">
+                <h1 class="text-2xl font-medium mb-2">Proof-of-Deposit Ledger ⛓️</h1>
+                <p class="text-secondary mb-6">Immutable record of all data ingress/egress. Hashed locally.</p>
+                
+                <div class="bg-panel border border-theme rounded-lg overflow-hidden">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left bg-surface border-b border-theme text-secondary font-code uppercase text-xs">
+                                <th class="p-4">TIMESTAMP</th>
+                                <th class="p-4">ACTION</th>
+                                <th class="p-4">PROOF HASH (SHA-256)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledger-list">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="view-settings" class="view-section absolute inset-0 hidden p-8 overflow-y-auto fade-in">
+                <h1 class="text-2xl font-medium mb-6">World Configuration ⚙️</h1>
+                
+                <div class="bg-surface border border-theme p-6 rounded-lg mb-6">
+                    <h3 class="text-lg font-medium mb-4">Design Skin</h3>
+                    <div class="flex gap-3">
+                        <button class="bg-panel border border-theme text-primary px-4 py-2 rounded-md hover:border-primary transition-colors text-sm" onclick="UI.setSkin('default')">Zinc (Default)</button>
+                        <button class="bg-panel border border-theme text-primary px-4 py-2 rounded-md hover:border-primary transition-colors text-sm" onclick="UI.setSkin('amber')">Amber (Cyber)</button>
+                        <button class="bg-panel border border-theme text-primary px-4 py-2 rounded-md hover:border-primary transition-colors text-sm" onclick="UI.setSkin('slate')">Slate (Blue)</button>
+                    </div>
+                </div>
+
+                <div class="bg-surface border border-theme p-6 rounded-lg">
+                    <h3 class="text-lg font-medium mb-2">Portable World</h3>
+                    <p class="text-secondary text-sm mb-4">Export your entire state (Vault + Ledger + Vectors) to a single encrypted file.</p>
+                    <button class="bg-accent text-accent-inv px-5 py-2 rounded-md font-semibold text-sm" onclick="System.exportWorld()">Download .worldpack</button>
                 </div>
             </div>
         </div>
-
-    </main>
+    </div>
 
     <script>
-        // --- ICONS ---
         feather.replace();
 
-        // --- STATE MANAGEMENT ---
-        const state = {
-            view: 'dashboard',
-            apiKey: '',
-            vault: [
-                // Simulate files "on-chain" or in the vault
-                { id: '003', name: 'corporate_security_v1.docx', size: '1.2', encrypt: 'AES-256', hash: 'c9f1a23e4d56b8790c1d2e3f4a5b67890123456789abcdef0123456789abcdef', ts: '2025-11-25 11:00' },
-                { id: '002', name: 'supply_chain_v4.pdf', size: '10.5', encrypt: 'AES-256', hash: '87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7', ts: '2025-11-25 10:15' },
-                { id: '001', name: 'world_os_manifest.json', size: '0.1', encrypt: 'ECC-P256', hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', ts: '2025-11-25 09:30' }
-            ]
+        // --- CORE SYSTEM STATE ---
+        const State = {
+            vault: [],
+            ledger: [],
+            skin: 'default',
         };
 
-        // --- NAVIGATION ---
-        function nav(viewName) {
-            // Update Menu
-            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(`nav-${viewName}`).classList.add('active');
-
-            // Update View
-            document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-            document.getElementById(`view-${viewName}`).classList.add('active');
-
-            // Update Breadcrumbs
-            const niceName = viewName.charAt(0).toUpperCase() + viewName.slice(1).replace('vault', 'Vault'); // Capitalize for display
-            document.getElementById('breadcrumbs').innerHTML = `WorldOS / <span>${niceName}</span>`;
-            
-            state.view = viewName;
-
-            // Rerender tables when navigating to ensure data is up-to-date
-            if (viewName === 'dashboard') {
-                renderDashboard();
-            } else if (viewName === 'vault') {
-                renderVault();
+        // --- CRYPTO MODULE (REAL HASHING) ---
+        const CryptoCore = {
+            async sha256(message) {
+                // Ensure message is a string for TextEncoder
+                const msgString = typeof message === 'string' ? message : JSON.stringify(message);
+                const msgBuffer = new TextEncoder().encode(msgString);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
             }
-        }
+        };
 
-        // --- SETTINGS: API KEY ---
-        document.getElementById('save-key-btn').addEventListener('click', () => {
-            const input = document.getElementById('api-key-input').value.trim();
-            if(input.length > 10) {
-                state.apiKey = input;
-                const status = document.getElementById('key-status');
-                status.style.display = 'block';
-                status.textContent = "KEY STORED IN SESSION MEMORY";
-                setTimeout(() => { status.style.display = 'none'; }, 3000);
-            } else {
-                alert("Invalid Key format. Please ensure you paste a valid key.");
-            }
-        });
-
-        // --- INTELLIGENCE: GEMINI API CALL (Simulated) ---
-        const chatWindow = document.getElementById('gemini-chat-window');
-        const aiInput = document.getElementById('ai-input');
-        const aiSend = document.getElementById('ai-send');
-
-        function appendMessage(role, text) {
-            const div = document.createElement('div');
-            div.className = `message ${role}`;
-            
-            // Basic markdown parsing for code blocks and bold
-            let formatted = text
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/```([\s\S]*?)```/g, '<pre style="background:#000; padding:10px; border-radius:4px; overflow-x:auto;"><code>$1</code></pre>');
-
-            div.innerHTML = `<div class="bubble">${formatted}</div>`;
-            chatWindow.appendChild(div);
-            chatWindow.scrollTop = chatWindow.scrollHeight;
-        }
-
-        async function callGemini(prompt) {
-            // A real implementation would involve a secure backend proxy, not a direct API call from here.
-            if(!state.apiKey) {
-                appendMessage('ai', '❌ **Error:** API Key missing. Please go to Settings and configure your Google Gemini Key to enable Neural Analysis.');
-                return;
-            }
-
-            // UI Loading state
-            aiInput.value = '';
-            aiInput.disabled = true;
-            aiSend.disabled = true;
-            appendMessage('user', prompt);
-            
-            const loadingId = 'loading-' + Date.now();
-            const loaderDiv = document.createElement('div');
-            loaderDiv.className = 'message ai';
-            loaderDiv.id = loadingId;
-            loaderDiv.innerHTML = `<div class="bubble text-muted mono">Processing request via Neural Node...</div>`;
-            chatWindow.appendChild(loaderDiv);
-            chatWindow.scrollTop = chatWindow.scrollHeight;
-
-            try {
-                // *** This is the actual API call, but is insecure on the front-end. ***
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.apiKey}`;
-                
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{ text: prompt }]
-                        }],
-                        // System instruction to set the AI's persona
-                        system_instruction: {
-                            parts: [{ text: "You are WorldOS Intelligence, a high-level strategic data analyst. You speak in a professional, concise, slightly futuristic tone. Use markdown for formatting. You are integrated into a sovereign data bank." }]
-                        }
-                    })
+        // --- ROUTER ---
+        const Router = {
+            nav: (viewId, element) => {
+                document.querySelectorAll('.view-section').forEach(el => {
+                    el.classList.remove('active');
+                    el.classList.add('hidden');
                 });
-
-                const data = await response.json();
                 
-                // Remove loader
-                document.getElementById(loadingId).remove();
+                const targetView = document.getElementById('view-' + viewId);
+                targetView.classList.remove('hidden');
+                targetView.classList.add('active', 'fade-in');
 
-                if (data.error) {
-                    appendMessage('ai', `**System Error:** ${data.error.message}`);
+                document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+                if (element) {
+                    element.classList.add('active');
                 } else {
-                    const aiText = data.candidates[0].content.parts[0].text;
-                    appendMessage('ai', aiText);
+                    // Fallback to finding the correct nav item
+                    document.getElementById(`nav-${viewId}`)?.classList.add('active');
                 }
-
-            } catch (err) {
-                document.getElementById(loadingId).remove();
-                appendMessage('ai', `**Connection Failure:** ${err.message}. Check your API key and network connection.`);
-            }
-
-            aiInput.disabled = false;
-            aiSend.disabled = false;
-            aiInput.focus();
-        }
-
-        aiSend.addEventListener('click', () => {
-            const txt = aiInput.value.trim();
-            if(txt) callGemini(txt);
-        });
-
-        aiInput.addEventListener('keypress', (e) => {
-            if(e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                aiSend.click();
-            }
-        });
-
-        // --- MOCK DATA RENDER ---
-        function renderDashboard() {
-            const tbody = document.getElementById('dash-table-body');
-            tbody.innerHTML = '';
-            // Only show top 5 on dashboard
-            state.vault.slice(0, 5).forEach(file => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td class="mono text-muted">#${file.id}</td>
-                        <td style="font-weight:500">${file.name}</td>
-                        <td class="hash-mono">${file.hash.substring(0,20)}...</td>
-                        <td class="text-sm text-muted">${file.ts}</td>
-                    </tr>
-                `;
-            });
-            document.getElementById('stat-deposits').textContent = state.vault.length;
-        }
-
-        function renderVault() {
-            const tbody = document.getElementById('vault-table-body');
-            tbody.innerHTML = '';
-            
-            if (state.vault.length === 0) {
-                 tbody.innerHTML = `
-                    <tr>
-                        <td colspan="4" style="text-align:center; padding:3rem; color:var(--text-muted)">
-                            Vault initialized. Upload files to generate secure proof hashes.
-                        </td>
-                    </tr>
-                `;
-                return;
-            }
-
-            state.vault.forEach(file => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td style="font-weight:500">${file.name}</td>
-                        <td>${file.size} <span class="text-muted text-sm">MB</span></td>
-                        <td><span class="status-pill info">${file.encrypt}</span></td>
-                        <td class="hash-mono">${file.hash.substring(0,20)}... <span class="status-pill success" style="margin-left:8px;">VERIFIED</span></td>
-                    </tr>
-                `;
-            });
-        }
-
-        // File Upload Simulation (Blockchain Concept Mock)
-        document.getElementById('file-upload').addEventListener('change', (e) => {
-            if(e.target.files[0]) {
-                const file = e.target.files[0];
                 
-                // Function to generate a random 64-char hex string (SHA-256 mock)
-                const mockSHA256 = () => Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
-                const mockID = '00' + (state.vault.length + 1);
+                document.getElementById('breadcrumb').innerText = `/${viewId}`;
+            }
+        };
 
-                const newEntry = {
-                    id: mockID,
+        // --- UI CONTROLLER ---
+        const UI = {
+            setSkin: (skinName) => {
+                document.body.setAttribute('data-skin', skinName);
+                State.skin = skinName;
+                UI.log(`System skin changed to: ${skinName}`);
+            },
+            log: (msg) => {
+                const logEl = document.getElementById('activity-log');
+                const time = new Date().toLocaleTimeString([], {hour12:false});
+                const newLog = document.createElement('div');
+                newLog.innerHTML = `<span class="opacity-50">[${time}]</span> ${msg}`;
+                
+                // Prepend new log item
+                if (logEl.firstChild) {
+                    logEl.insertBefore(newLog, logEl.firstChild);
+                } else {
+                    logEl.appendChild(newLog);
+                }
+            },
+            renderVault: () => {
+                const tbody = document.getElementById('vault-list');
+                const totalSize = State.vault.reduce((a,b)=>a+b.size,0);
+                const totalSizeKB = (totalSize/1024).toFixed(1);
+
+                if(State.vault.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center p-5 text-secondary">Vault is empty. Deposit your first file.</td></tr>';
+                    document.getElementById('dash-usage').innerText = `0 KB`;
+                    document.getElementById('dash-usage-val').innerText = `0 MB`;
+                    return;
+                }
+                
+                tbody.innerHTML = State.vault.map(f => `
+                    <tr>
+                        <td class="p-4 font-medium">${f.name}</td>
+                        <td class="p-4 font-code text-secondary">${(f.size/1024).toFixed(1)} KB</td>
+                        <td class="p-4 text-indicator-ok font-medium">AES-256</td>
+                        <td class="p-4 text-secondary">${f.type}</td>
+                    </tr>
+                `).join('');
+
+                document.getElementById('dash-usage').innerText = `${totalSizeKB} KB`;
+                document.getElementById('dash-usage-val').innerText = `${totalSizeKB} KB`;
+            },
+            renderLedger: () => {
+                const tbody = document.getElementById('ledger-list');
+                
+                if (State.ledger.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center p-5 text-secondary">Ledger is currently empty.</td></tr>';
+                } else {
+                    tbody.innerHTML = State.ledger.map(l => `
+                        <tr>
+                            <td class="p-4 font-code text-secondary text-xs">${l.ts.substring(0, 10)} ${l.ts.substring(11, 19)}</td>
+                            <td class="p-4 font-medium">${l.action}</td>
+                            <td class="p-4 font-code text-secondary text-xs">${l.hash.substring(0, 30)}...</td>
+                        </tr>
+                    `).join('');
+                }
+                
+                document.getElementById('dash-ledger').innerText = State.ledger.length;
+            }
+        };
+
+        // --- VAULT LOGIC ---
+        const Vault = {
+            ingest: async (input) => {
+                if(!input.files[0]) return;
+                const file = input.files[0];
+                
+                // Simulate "Reading" and "Hashing" (Using file metadata as proxy content)
+                const fakeContent = JSON.stringify({ name: file.name, size: file.size, lastModified: file.lastModified });
+                const hash = await CryptoCore.sha256(fakeContent);
+                
+                const entry = {
                     name: file.name,
-                    size: (file.size / 1024 / 1024).toFixed(2), // MB
-                    encrypt: 'AES-256', // Mock encryption status
-                    hash: mockSHA256(),
-                    ts: new Date().toISOString().slice(0,16).replace('T', ' ')
+                    size: file.size,
+                    type: file.type || 'unknown',
+                    hash: hash,
+                    added: Date.now()
                 };
 
-                // Add to the vault (new proofs go to the top)
-                state.vault.unshift(newEntry);
+                State.vault.push(entry);
                 
-                // Alert simulates a successful "on-chain" or secure storage event
-                alert(`File Deposited & Hashed (Proof Generated):\nID: #${mockID}\nHash: ${newEntry.hash.substring(0,30)}...`);
-                
-                // Clear the file input so the same file can be uploaded again if desired
-                e.target.value = null;
+                // Update Ledger
+                State.ledger.unshift({
+                    ts: new Date().toISOString(),
+                    action: `DEPOSIT: ${file.name}`,
+                    hash: hash
+                });
 
-                // Update both tables and switch to dashboard to see the new entry
-                renderDashboard();
-                renderVault();
-                nav('dashboard');
+                UI.log(`Deposited: ${file.name} (Proof: ${hash.substring(0,8)}...)`);
+                UI.renderVault();
+                UI.renderLedger();
+                input.value = null; // Clear input for next file
+                Router.nav('vault'); // Switch to view result
             }
+        };
+
+        // --- AI LOGIC (LOCAL SIMULATION) ---
+        const AI = {
+            send: async () => {
+                const inputEl = document.getElementById('chat-input');
+                const text = inputEl.value.trim();
+                if(!text) return;
+
+                AI.appendMsg('user', text);
+                inputEl.value = '';
+
+                // Simulate "Thinking" delay
+                AI.appendMsg('system', 'Reading Vault vectors... Generating response...');
+                
+                setTimeout(() => {
+                    // Simple Rule-Based Simulation of a RAG System
+                    let response;
+                    const lowerText = text.toLowerCase();
+                    const vaultCount = State.vault.length;
+                    const ledgerCount = State.ledger.length;
+
+                    if(lowerText.includes('hello') || lowerText.includes('hi')) {
+                        response = "Systems online. I am ready to process your data locally.";
+                    }
+                    else if(lowerText.includes('vault') || lowerText.includes('files')) {
+                        if(vaultCount === 0) {
+                            response = "Your vault is currently empty. Upload files to begin building your local knowledge base.";
+                        } else {
+                            const names = State.vault.map(f => f.name).join(', ');
+                            response = `I found **${vaultCount}** items in your secure vault. They include: **${names}**. I can analyze these if you wish.`;
+                        }
+                    }
+                    else if(lowerText.includes('ledger') || lowerText.includes('proof')) {
+                        response = `The ledger contains **${ledgerCount}** immutable entries. The last action was: **${State.ledger[0]?.action || 'None'}**.`;
+                    }
+                    else if(lowerText.includes('export') || lowerText.includes('backup')) {
+                        response = "You can export your entire World state in the **Config** tab. This will generate a `.worldpack` file encrypted with your session key.";
+                    }
+                    else {
+                        response = "I have logged that query. Since I am running in simulation mode, I can only track Vault, Ledger, and System status currently. In the full build, this would trigger a local Llama-3 inference.";
+                    }
+
+                    // Remove "thinking" msg and add real response
+                    const history = document.getElementById('chat-history');
+                    history.lastElementChild.remove();
+                    AI.appendMsg('ai', response);
+                }, 800);
+            },
+            appendMsg: (role, text) => {
+                const history = document.getElementById('chat-history');
+                const div = document.createElement('div');
+                div.className = `msg ${role} p-3 rounded-lg`;
+                div.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>'); // Simple markdown parser
+                history.appendChild(div);
+                history.scrollTop = history.scrollHeight;
+            }
+        };
+
+        // --- SYSTEM UTILITIES ---
+        const System = {
+            exportWorld: () => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(State, null, 2));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", `world_backup_${Date.now()}.worldpack`);
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+                UI.log("World exported to local disk.");
+            },
+            init: () => {
+                // Initial render calls
+                UI.renderVault();
+                UI.renderLedger();
+            }
+        };
+        
+        // --- EVENT LISTENERS ---
+        // Handle Enter key in chat
+        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+            if(e.key === 'Enter') AI.send();
         });
 
-        // Init: Render the dashboard on load
-        renderDashboard();
+        // Initialize the system
+        System.init();
 
     </script>
 </body>
