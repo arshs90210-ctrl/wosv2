@@ -164,6 +164,18 @@
         td { padding: 16px; border-bottom: 1px solid var(--border); color: var(--text-main); }
         tr:last-child td { border-bottom: none; }
         .hash-mono { font-family: var(--font-mono); color: var(--text-muted); font-size: 0.8rem; }
+        .status-pill {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .status-pill.success { background: rgba(34, 197, 94, 0.2); color: var(--accent); }
+        .status-pill.info { background: rgba(99, 102, 241, 0.2); color: #6366f1; }
+
 
         /* --- INTELLIGENCE (CHAT) --- */
         .chat-layout {
@@ -255,6 +267,13 @@
             font-family: var(--font-mono);
             margin-bottom: 1rem;
         }
+        /* Style for the file input in the vault view */
+        .deposit-button-container {
+            display:flex; 
+            justify-content:space-between; 
+            align-items:center; 
+            margin-bottom:2rem;
+        }
 
     </style>
 </head>
@@ -267,19 +286,19 @@
         </div>
         
         <nav>
-            <button class="nav-btn active" onclick="nav('dashboard')">
+            <button id="nav-dashboard" class="nav-btn active" onclick="nav('dashboard')">
                 <i data-feather="grid"></i> Dashboard
             </button>
-            <button class="nav-btn" onclick="nav('intelligence')">
+            <button id="nav-intelligence" class="nav-btn" onclick="nav('intelligence')">
                 <i data-feather="cpu"></i> Intelligence
             </button>
-            <button class="nav-btn" onclick="nav('vault')">
+            <button id="nav-vault" class="nav-btn" onclick="nav('vault')">
                 <i data-feather="database"></i> Data Vault
             </button>
         </nav>
 
         <div class="nav-footer">
-            <button class="nav-btn" onclick="nav('settings')">
+            <button id="nav-settings" class="nav-btn" onclick="nav('settings')">
                 <i data-feather="settings"></i> Settings
             </button>
         </div>
@@ -299,7 +318,7 @@
             
             <div class="grid-stats">
                 <div class="stat-card">
-                    <div class="stat-label">Total Deposits</div>
+                    <div class="stat-label">Total Deposits (on-chain)</div>
                     <div class="stat-value" id="stat-deposits">12</div>
                 </div>
                 <div class="stat-card">
@@ -319,7 +338,7 @@
                         <tr>
                             <th>ID</th>
                             <th>FILE NAME</th>
-                            <th>HASH</th>
+                            <th>PROOF HASH</th>
                             <th>TIMESTAMP</th>
                         </tr>
                     </thead>
@@ -339,21 +358,21 @@
                 <div id="gemini-chat-window" class="chat-window">
                     <div class="message ai">
                         <div class="bubble">
-                            System initialized. I am WorldOS Intelligence. Please verify your API Key in Settings before proceeding, then provide data for analysis.
+                            System initialized. I am WorldOS Intelligence. **NOTE:** This is a simulated environment. For real analysis, a secure **backend proxy** is required to handle API requests.
                         </div>
                     </div>
                 </div>
 
                 <div class="input-area">
                     <textarea id="ai-input" placeholder="Query the system... (e.g., 'Analyze the hash patterns', 'Draft a security protocol')"></textarea>
-                    <button id="ai-send" class="btn-send"><i data-feather="arrow-up"></i></button>
+                    <button id="ai-send" class="btn-send" style="display: flex; align-items: center; justify-content: center; height: 50px;"><i data-feather="arrow-up"></i></button>
                 </div>
             </div>
         </div>
 
         <div id="view-vault" class="view">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem;">
-                <h2>Data Vault</h2>
+            <div class="deposit-button-container">
+                <h2>Data Vault (Blockchain Proofs)</h2>
                 <button class="btn-send" style="height:40px;" onclick="document.getElementById('file-upload').click()">+ Deposit File</button>
                 <input type="file" id="file-upload" style="display:none">
             </div>
@@ -365,16 +384,11 @@
                             <th>FILE NAME</th>
                             <th>SIZE</th>
                             <th>ENCRYPTION</th>
-                            <th>PROOF</th>
+                            <th>PROOF HASH</th>
                         </tr>
                     </thead>
                     <tbody id="vault-table-body">
-                        <tr>
-                            <td colspan="4" style="text-align:center; padding:3rem; color:var(--text-muted)">
-                                Vault initialized. Upload files to generate hashes.
-                            </td>
-                        </tr>
-                    </tbody>
+                        </tbody>
                 </table>
             </div>
         </div>
@@ -386,18 +400,18 @@
                 <div class="stat-card">
                     <h3 style="margin-bottom: 1rem;">Gemini API Integration</h3>
                     <p class="text-muted text-sm" style="margin-bottom: 1rem;">
-                        WorldOS requires a Google Gemini API key to perform neural analysis. The key is stored in your browser's session memory only.
+                        WorldOS requires a Google Gemini API key to perform neural analysis. **SECURITY WARNING: In a real deployment, this key must be handled by a secure backend server, not the browser.**
                     </p>
                     
                     <div class="api-warning">
                         <i data-feather="alert-triangle" style="width:14px; vertical-align:middle"></i>
-                        Security Note: Never share this key.
+                        Security Note: Never share this key publicly.
                     </div>
 
                     <label class="stat-label">API Key</label>
                     <input type="password" id="api-key-input" placeholder="Paste key here (AIzaSy...)">
                     <button id="save-key-btn" class="btn-send" style="width:100%; padding: 12px 0;">Save Configuration</button>
-                    <p id="key-status" class="mono text-xs" style="margin-top:10px; color:var(--accent); display:none;">KEY SAVED SECURELY</p>
+                    <p id="key-status" class="mono text-xs" style="margin-top:10px; color:var(--accent); display:none;">KEY SAVED SECURELY (in session)</p>
                 </div>
             </div>
         </div>
@@ -413,8 +427,10 @@
             view: 'dashboard',
             apiKey: '',
             vault: [
-                { id: '001', name: 'world_os_manifest.json', hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', ts: '2025-11-25 09:30' },
-                { id: '002', name: 'supply_chain_v4.pdf', hash: '87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7', ts: '2025-11-25 10:15' }
+                // Simulate files "on-chain" or in the vault
+                { id: '003', name: 'corporate_security_v1.docx', size: '1.2', encrypt: 'AES-256', hash: 'c9f1a23e4d56b8790c1d2e3f4a5b67890123456789abcdef0123456789abcdef', ts: '2025-11-25 11:00' },
+                { id: '002', name: 'supply_chain_v4.pdf', size: '10.5', encrypt: 'AES-256', hash: '87428fc522803d31065e7bce3cf03fe475096631e5e07bbd7a0fde60c4cf25c7', ts: '2025-11-25 10:15' },
+                { id: '001', name: 'world_os_manifest.json', size: '0.1', encrypt: 'ECC-P256', hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', ts: '2025-11-25 09:30' }
             ]
         };
 
@@ -422,24 +438,29 @@
         function nav(viewName) {
             // Update Menu
             document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-            // Find button roughly by text content or logic (simplified for demo)
-            // Ideally we'd add IDs to buttons, but let's just use the onclick trigger visual update
-            event.currentTarget.classList.add('active');
+            document.getElementById(`nav-${viewName}`).classList.add('active');
 
             // Update View
             document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
             document.getElementById(`view-${viewName}`).classList.add('active');
 
             // Update Breadcrumbs
-            const niceName = viewName.charAt(0).toUpperCase() + viewName.slice(1);
+            const niceName = viewName.charAt(0).toUpperCase() + viewName.slice(1).replace('vault', 'Vault'); // Capitalize for display
             document.getElementById('breadcrumbs').innerHTML = `WorldOS / <span>${niceName}</span>`;
             
             state.view = viewName;
+
+            // Rerender tables when navigating to ensure data is up-to-date
+            if (viewName === 'dashboard') {
+                renderDashboard();
+            } else if (viewName === 'vault') {
+                renderVault();
+            }
         }
 
         // --- SETTINGS: API KEY ---
         document.getElementById('save-key-btn').addEventListener('click', () => {
-            const input = document.getElementById('api-key-input').value;
+            const input = document.getElementById('api-key-input').value.trim();
             if(input.length > 10) {
                 state.apiKey = input;
                 const status = document.getElementById('key-status');
@@ -447,11 +468,11 @@
                 status.textContent = "KEY STORED IN SESSION MEMORY";
                 setTimeout(() => { status.style.display = 'none'; }, 3000);
             } else {
-                alert("Invalid Key format");
+                alert("Invalid Key format. Please ensure you paste a valid key.");
             }
         });
 
-        // --- INTELLIGENCE: GEMINI API CALL ---
+        // --- INTELLIGENCE: GEMINI API CALL (Simulated) ---
         const chatWindow = document.getElementById('gemini-chat-window');
         const aiInput = document.getElementById('ai-input');
         const aiSend = document.getElementById('ai-send');
@@ -471,8 +492,9 @@
         }
 
         async function callGemini(prompt) {
+            // A real implementation would involve a secure backend proxy, not a direct API call from here.
             if(!state.apiKey) {
-                appendMessage('ai', '❌ **Error:** API Key missing. Please go to Settings and configure your Google Gemini Key.');
+                appendMessage('ai', '❌ **Error:** API Key missing. Please go to Settings and configure your Google Gemini Key to enable Neural Analysis.');
                 return;
             }
 
@@ -488,8 +510,10 @@
             loaderDiv.id = loadingId;
             loaderDiv.innerHTML = `<div class="bubble text-muted mono">Processing request via Neural Node...</div>`;
             chatWindow.appendChild(loaderDiv);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
 
             try {
+                // *** This is the actual API call, but is insecure on the front-end. ***
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.apiKey}`;
                 
                 const response = await fetch(url, {
@@ -499,6 +523,7 @@
                         contents: [{
                             parts: [{ text: prompt }]
                         }],
+                        // System instruction to set the AI's persona
                         system_instruction: {
                             parts: [{ text: "You are WorldOS Intelligence, a high-level strategic data analyst. You speak in a professional, concise, slightly futuristic tone. Use markdown for formatting. You are integrated into a sovereign data bank." }]
                         }
@@ -519,7 +544,7 @@
 
             } catch (err) {
                 document.getElementById(loadingId).remove();
-                appendMessage('ai', `**Connection Failure:** ${err.message}`);
+                appendMessage('ai', `**Connection Failure:** ${err.message}. Check your API key and network connection.`);
             }
 
             aiInput.disabled = false;
@@ -543,7 +568,8 @@
         function renderDashboard() {
             const tbody = document.getElementById('dash-table-body');
             tbody.innerHTML = '';
-            state.vault.forEach(file => {
+            // Only show top 5 on dashboard
+            state.vault.slice(0, 5).forEach(file => {
                 tbody.innerHTML += `
                     <tr>
                         <td class="mono text-muted">#${file.id}</td>
@@ -556,29 +582,68 @@
             document.getElementById('stat-deposits').textContent = state.vault.length;
         }
 
-        // File Upload Simulation
+        function renderVault() {
+            const tbody = document.getElementById('vault-table-body');
+            tbody.innerHTML = '';
+            
+            if (state.vault.length === 0) {
+                 tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" style="text-align:center; padding:3rem; color:var(--text-muted)">
+                            Vault initialized. Upload files to generate secure proof hashes.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            state.vault.forEach(file => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="font-weight:500">${file.name}</td>
+                        <td>${file.size} <span class="text-muted text-sm">MB</span></td>
+                        <td><span class="status-pill info">${file.encrypt}</span></td>
+                        <td class="hash-mono">${file.hash.substring(0,20)}... <span class="status-pill success" style="margin-left:8px;">VERIFIED</span></td>
+                    </tr>
+                `;
+            });
+        }
+
+        // File Upload Simulation (Blockchain Concept Mock)
         document.getElementById('file-upload').addEventListener('change', (e) => {
             if(e.target.files[0]) {
                 const file = e.target.files[0];
+                
+                // Function to generate a random 64-char hex string (SHA-256 mock)
+                const mockSHA256 = () => Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
+                const mockID = '00' + (state.vault.length + 1);
+
                 const newEntry = {
-                    id: '00' + (state.vault.length + 1),
+                    id: mockID,
                     name: file.name,
-                    hash: Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join(''),
+                    size: (file.size / 1024 / 1024).toFixed(2), // MB
+                    encrypt: 'AES-256', // Mock encryption status
+                    hash: mockSHA256(),
                     ts: new Date().toISOString().slice(0,16).replace('T', ' ')
                 };
+
+                // Add to the vault (new proofs go to the top)
                 state.vault.unshift(newEntry);
-                alert(`File Encrypted & Hashed:\n${newEntry.hash.substring(0,30)}...`);
-                renderDashboard();
                 
-                // Switch to dashboard to see it
+                // Alert simulates a successful "on-chain" or secure storage event
+                alert(`File Deposited & Hashed (Proof Generated):\nID: #${mockID}\nHash: ${newEntry.hash.substring(0,30)}...`);
+                
+                // Clear the file input so the same file can be uploaded again if desired
+                e.target.value = null;
+
+                // Update both tables and switch to dashboard to see the new entry
+                renderDashboard();
+                renderVault();
                 nav('dashboard');
-                // Re-find the button visually
-                document.querySelectorAll('.nav-btn')[0].classList.add('active');
-                document.querySelectorAll('.nav-btn')[2].classList.remove('active');
             }
         });
 
-        // Init
+        // Init: Render the dashboard on load
         renderDashboard();
 
     </script>
