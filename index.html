@@ -49,11 +49,22 @@
 
         /* Ledger entry style */
         .ledger-entry { background-color: var(--bg-surface); border: 1px solid var(--border); }
+
+        /* Fix the layout issue: ensure the body takes full width and height */
+        body { 
+            width: 100vw; /* Take full viewport width */
+            height: 100vh; /* Take full viewport height */
+        }
+        /* The main content area needs overflow-y to handle its content, and flex-1 to occupy remaining width */
+        #main > .flex-1.overflow-hidden.relative {
+            overflow-y: auto !important; /* Allow internal scrolling for content */
+            overflow-x: hidden !important; /* Prevent horizontal overflow */
+        }
     </style>
 </head>
 <body class="flex">
 
-    <aside class="w-60 bg-panel border-r border-theme flex flex-col z-20">
+    <aside class="w-60 bg-panel border-r border-theme flex flex-col z-20 h-full shrink-0">
         <div class="p-6 flex items-center gap-3 select-none border-b border-theme">
             <i data-feather="hexagon" class="text-white"></i>
             <div>
@@ -88,9 +99,9 @@
         </div>
     </aside>
 
-    <div id="main" class="flex-1 flex flex-col relative bg-os">
+    <div id="main" class="flex-1 flex flex-col relative bg-os overflow-hidden"> 
         
-        <header class="h-14 border-b border-theme flex items-center justify-between px-6 sticky top-0 bg-panel/80 backdrop-blur-sm z-10">
+        <header class="h-14 border-b border-theme flex items-center justify-between px-6 sticky top-0 bg-panel/80 backdrop-blur-sm z-10 shrink-0">
             <div class="text-xs font-code text-secondary">
                 root@local-node ~ <span class="text-primary" id="breadcrumb">/dashboard</span>
             </div>
@@ -102,7 +113,7 @@
             </div>
         </header>
 
-        <div class="flex-1 overflow-hidden relative">
+        <div class="flex-1 relative">
             
             <div id="view-dashboard" class="view-section absolute inset-0 p-8 overflow-y-auto fade-in active">
                 <h2 class="text-2xl font-medium mb-6">System Overview 👋</h2>
@@ -138,9 +149,9 @@
                 </div>
             </div>
 
-            <div id="view-intelligence" class="view-section absolute inset-0 hidden p-8">
+            <div id="view-intelligence" class="view-section absolute inset-0 hidden p-8 overflow-y-auto">
                 <div class="flex flex-col h-full bg-panel border border-theme rounded-lg overflow-hidden">
-                    <div class="flex-1 p-5 overflow-y-auto font-code text-sm space-y-4" id="chat-history">
+                    <div class="flex-1 p-5 font-code text-sm space-y-4" id="chat-history">
                         <div class="flex items-start gap-4">
                             <div class="w-8 h-8 rounded bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
                                 <i data-feather="cpu" class="w-4 h-4 text-indicator-ok"></i>
@@ -151,7 +162,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="p-4 border-t border-theme bg-theme-panel">
+                    <div class="p-4 border-t border-theme bg-theme-panel shrink-0">
                         <div class="max-w-4xl mx-auto relative">
                             <input type="text" id="ai-input" placeholder="Query your local data..." class="w-full bg-zinc-900 border border-zinc-700 rounded-md py-3 pl-4 pr-12 text-sm text-white focus:border-white transition-colors">
                             <button onclick="AI.send()" class="absolute right-2 top-2 p-1.5 hover:bg-zinc-800 rounded text-secondary hover:text-white transition-colors">
@@ -363,7 +374,7 @@
                 
                 alert(`SECURE DEPOSIT COMPLETE\nFile: ${file.name}\nProof: ${hash.substring(0,16)}...`);
                 input.value = '';
-                Router.nav('vault', document.getElementById('nav-vault'));
+                Router.nav('vault', document.querySelector('#nav-vault'));
             },
             getLatestLedgerHash: async () => {
                 const allLedger = await DB.getAll('ledger');
@@ -381,7 +392,8 @@
         // --- 3. DATA MARKETPLACE (PPDM) LOGIC ---
         const Marketplace = {
             toggleListing: async (fileId) => {
-                const file = (await DB.getAll('files')).find(f => f.id === fileId);
+                const files = await DB.getAll('files');
+                const file = files.find(f => f.id === fileId);
                 if (!file) return;
 
                 file.marketListed = !file.marketListed;
@@ -420,19 +432,17 @@
                 return (base * parseFloat(sizeKB)) * (1 + (Math.random() * 0.5 - 0.25));
             },
             sellAsset: async (fileId) => {
-                const marketAsset = (await DB.getAll('market')).find(a => a.id === fileId);
+                const marketAssets = await DB.getAll('market');
+                const marketAsset = marketAssets.find(a => a.id === fileId);
                 if (!marketAsset || marketAsset.isSold) return;
 
                 const finalPrice = Marketplace.simulatePrice(marketAsset.category, marketAsset.sizeKB);
                 
                 // --- CRITICAL STEP: SIMULATE TRANSACTION & ANONYMIZATION ---
-                // In a real PPDM, this would trigger an atomic smart contract that:
-                // 1. Anonymizes the data on the client (e.g., Homomorphic Encryption or Differential Privacy).
-                // 2. Transmits the ANONYMIZED derivative data to the buyer.
-                // 3. Transfers funds to the user's wallet.
+                // PoD for the transaction
                 
                 const ledgerBlock = {
-                    hash: await CryptoCore.sha256(marketAsset.fileHash + Date.now()), // New PoD for the transaction
+                    hash: await CryptoCore.sha256(marketAsset.fileHash + Date.now()), 
                     prevHash: await Vault.getLatestLedgerHash(),
                     timestamp: new Date().toISOString(),
                     action: `SALE: ${marketAsset.category} Data`,
@@ -455,7 +465,7 @@
                 tbody.innerHTML = '';
                 
                 if (listedAssets.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-secondary">No data assets listed.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-secondary">No data assets listed. Deposit files and list them in the Vault view.</td></tr>';
                 }
 
                 let totalPortfolioValue = 0;
@@ -489,8 +499,6 @@
             updateAllStats: async () => {
                 const files = await DB.getAll('files');
                 const ledger = await DB.getAll('ledger');
-                const marketAssets = await DB.getAll('market');
-                const activeAssets = marketAssets.filter(a => !a.isSold);
                 
                 const totalSize = files.reduce((acc, f) => acc + f.size, 0);
                 const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
@@ -500,12 +508,11 @@
                 document.getElementById('storage-usage').innerText = `${totalSizeMB} MB`;
                 document.getElementById('dash-usage-val').innerText = `${totalSizeMB} MB`;
                 
-                // Update chart on every stat change
                 UI.renderChart(ledger);
             },
             renderVault: async () => {
                 const tbody = document.getElementById('vault-list');
-                tbody.innerHTML = ''; // Clear previous
+                tbody.innerHTML = ''; 
 
                 const files = await DB.getAll('files');
                 
@@ -530,7 +537,7 @@
                             ${marketBtn}
                         </td>
                     `;
-                    tbody.prepend(tr); // Newest first
+                    tbody.prepend(tr);
                 });
                 feather.replace();
             },
@@ -545,7 +552,6 @@
                     return;
                 }
                 
-                // Reverse to show newest first
                 [...ledger].reverse().forEach((block, index) => {
                     const div = document.createElement('div');
                     div.className = "ledger-entry p-4 rounded font-code text-xs space-y-2 fade-in";
@@ -564,7 +570,6 @@
             renderChart: (ledgerData) => {
                 const ctx = document.getElementById('vaultChart').getContext('2d');
                 
-                // Get cumulative deposits per day
                 const depositDates = ledgerData
                     .filter(b => b.action.startsWith('DEPOSIT'))
                     .map(b => new Date(b.timestamp).toLocaleDateString());
@@ -574,7 +579,6 @@
                     return acc;
                 }, {});
 
-                // Accumulate counts
                 let cumulative = 0;
                 const labels = Object.keys(counts).sort();
                 const data = labels.map(date => cumulative += counts[date]);
@@ -590,7 +594,7 @@
                         datasets: [{
                             label: 'Cumulative Deposits',
                             data: data,
-                            borderColor: '#22c55e', // indicator-ok
+                            borderColor: '#22c55e', 
                             backgroundColor: 'rgba(34, 197, 94, 0.2)',
                             tension: 0.3,
                             fill: true,
@@ -608,7 +612,6 @@
                 });
             },
             log: (msg) => {
-                // Simplified log function
                 console.log(`[LOG] ${msg}`);
             }
         };
@@ -651,7 +654,6 @@
                 const container = document.getElementById('chat-history');
                 const div = document.createElement('div');
                 
-                // Determine CSS classes for styling
                 const baseClasses = `flex items-start gap-4 ${role === 'user' ? 'flex-row-reverse' : ''} ${isLoading ? 'loading-msg' : ''}`;
                 const contentClasses = role === 'ai' 
                     ? 'bg-zinc-900 border-zinc-800 text-zinc-300' 
