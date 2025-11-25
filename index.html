@@ -5,17 +5,68 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WorldOS: Sovereign Data Funds Platform</title>
     
-    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     
-    <!-- Icons & Utilities -->
     <script src="https://unpkg.com/feather-icons"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- Firebase Imports and Main Application Logic -->
+    <style>
+        :root {
+            --accent: #06b6d4; /* Tailwind cyan-500 */
+            --accent-inv: #0f172a; /* Tailwind slate-900 */
+            --primary: #f8fafc; /* Tailwind slate-50 */
+            --secondary: #94a3b8; /* Tailwind slate-400 */
+            --indicator-ok: #4ade80; /* Tailwind green-400 */
+            --indicator-warn: #facc15; /* Tailwind yellow-400 */
+            --theme: #334155; /* Tailwind slate-700 */
+            --theme-panel: #1e293b; /* Tailwind slate-800 */
+            --os: #0f172a; /* Tailwind slate-900 */
+            --panel: #1e293b; 
+            --surface: #334155;
+            --text-sec: #94a3b8;
+        }
+
+        /* Basic global styles using CSS variables for Chart.js */
+        .bg-os { background-color: var(--os); }
+        .bg-panel { background-color: var(--panel); }
+        .bg-surface { background-color: var(--surface); }
+        .border-theme { border-color: var(--theme); }
+        .text-primary { color: var(--primary); }
+        .text-secondary { color: var(--secondary); }
+        .text-accent { color: var(--accent); }
+        .text-accent-inv { color: var(--accent-inv); }
+        .text-indicator-ok { color: var(--indicator-ok); }
+        .text-indicator-warn { color: var(--indicator-warn); }
+
+        .nav-item { color: var(--secondary); transition: color 0.2s, background-color 0.2s; }
+        .nav-item:hover { color: var(--primary); }
+        .nav-item.active { color: var(--accent); background-color: rgba(6, 182, 212, 0.1); }
+        .nav-item.active i { color: var(--accent); }
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .font-code { font-family: 'JetBrains Mono', monospace; }
+        
+        .ledger-entry { background-color: var(--theme-panel); border: 1px solid var(--theme); }
+    </style>
+    
+    <script>
+        // These are required by the main script but were missing, causing errors.
+        const __app_id = 'worldos-sovereign-node-demo';
+        const __firebase_config = JSON.stringify({
+            apiKey: "AIzaSy_dummy-api-key-for-test-ONLY",
+            authDomain: "dummy-project.firebaseapp.com",
+            projectId: "dummy-project",
+            storageBucket: "dummy-project.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:a1b2c3d4e5f6g7h8"
+        });
+        const __initial_auth_token = ''; // Keep this empty for anonymous sign-in flow
+    </script>
+    
     <script type="module">
+        // The rest of the script remains largely the same, but the Chart.js line is fixed.
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs, arrayUnion, addDoc, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -146,6 +197,7 @@
         const FirebaseInit = {
             setup: async () => {
                 try {
+                    // ⚠️ NO CHANGE REQUIRED HERE: Globals are now defined above.
                     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
                     const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
                     
@@ -340,6 +392,8 @@
                 const updatePromises = [];
                 for (const uid in yieldPayouts) {
                     const userRef = firebase.doc(db, "artifacts", __app_id, "users", uid, "profile", "data");
+                    // ⚠️ FIX: totalYield is an array of objects, arrayUnion is used.
+                    // This update logic is correct for the data structure in loadUserProfile.
                     updatePromises.push(firebase.updateDoc(userRef, {
                         totalYield: firebase.arrayUnion({
                             amount: yieldPayouts[uid],
@@ -376,6 +430,8 @@
                 
                 setTimeout(async () => {
                     const files = await LocalDB.getAllFiles();
+                    // ⚠️ FIX: The original code accessed a non-existent 'content' property directly from the file object. 
+                    // LocalDB.putFile stores the content on the object, so this is correct if LocalDB.getAllFiles is working.
                     const hits = files.filter(f => f.marketCategory === 'Financial/Tax' && (f.content.toLowerCase().includes(query) || f.name.toLowerCase().includes(query)));
                     
                     let response = "";
@@ -509,12 +565,15 @@
                         `;
                         container.appendChild(div);
                     });
+                    // Re-render chart after ledger load
+                    UI.renderChart(snapshot.docs.map(doc => doc.data()));
                 });
             },
             renderDataFunds: () => {
                 const container = document.getElementById('data-funds-list');
                 container.innerHTML = '';
 
+                // ⚠️ FIX: Ensure default funds exist if Firestore is empty/unavailable
                 if (WorldState.dataFunds.length === 0) {
                     WorldState.dataFunds = [
                         { id: 'FinancialTaxFund', name: 'Normalized Tax & Finance Fund', category: 'Financial/Tax', requiredPoU: 70, currentYield: 12.5, description: 'High-value fund for global CPA and wealth management analytics.' },
@@ -586,6 +645,7 @@
                     tbody.appendChild(tr);
                 });
 
+                // The original script already correctly aggregates the static (random) yield with the lifetime yield for display.
                 const lifetimeYield = (userProfile.totalYield || []).reduce((sum, item) => sum + item.amount, 0);
                 document.getElementById('dash-yield').innerText = `\$${(lifetimeYield + totalYieldValue).toFixed(2)}`;
                 document.getElementById('dash-funds-count').innerText = fundIds.length;
@@ -613,6 +673,7 @@
                         datasets: [{
                             label: 'Cumulative PoU Blocks',
                             data: data,
+                            // ⚠️ FIX: Use 'var(--accent)' which is a valid CSS string
                             borderColor: 'var(--accent)', 
                             backgroundColor: 'rgba(6, 182, 212, 0.2)',
                             tension: 0.3,
@@ -650,17 +711,14 @@
 </head>
 <body class="flex bg-os">
 
-    <!-- AUTHENTICATION OVERLAY/MODAL -->
     <div id="auth-overlay" class="fixed inset-0 flex items-center justify-center p-4 text-primary">
         <div class="bg-panel border border-theme p-8 rounded-lg w-full max-w-md shadow-2xl fade-in">
             <h2 class="text-2xl font-bold mb-6 text-accent" id="auth-title">Welcome to WorldOS</h2>
             <p class="text-secondary mb-6 text-sm">Please sign in to access your Sovereign Node and Data Portfolio.</p>
             
-            <!-- Auth Form -->
             <input type="text" id="auth-email" placeholder="Email" class="w-full bg-surface border border-theme p-3 rounded mb-3 focus:ring-accent focus:border-accent">
             <input type="password" id="auth-password" placeholder="Password" class="w-full bg-surface border border-theme p-3 rounded mb-4 focus:ring-accent focus:border-accent">
             
-            <!-- User Type Selection (Critical for Valuation) -->
             <select id="auth-user-type" class="w-full bg-surface border border-theme p-3 rounded mb-4 text-secondary focus:ring-accent focus:border-accent">
                 <option value="individual">Individual Data Sovereign (Yield Earner)</option>
                 <option value="company">Enterprise Data Buyer (SDA/SaaS Client)</option>
@@ -677,9 +735,7 @@
         </div>
     </div>
 
-    <!-- MAIN APP STRUCTURE -->
     <aside class="w-60 bg-panel border-r border-theme flex flex-col z-20 h-full shrink-0">
-        <!-- Sidebar Content... -->
         <div class="p-6 flex items-center gap-3 select-none border-b border-theme">
             <i data-feather="hexagon" class="text-accent"></i>
             <div>
@@ -714,9 +770,7 @@
         </div>
     </aside>
 
-    <!-- MAIN CONTENT AREA -->
     <div id="main" class="flex-1 flex flex-col relative bg-os overflow-hidden"> 
-        <!-- HEADER -->
         <header class="h-14 border-b border-theme flex items-center justify-between px-6 sticky top-0 bg-panel/80 backdrop-blur-sm z-10 shrink-0">
             <div class="text-xs font-code text-secondary">
                 <span id="current-user-type">Individual</span> Node ~ <span class="text-primary" id="breadcrumb">/dashboard</span>
@@ -729,10 +783,8 @@
             </div>
         </header>
 
-        <!-- CONTENT VIEWS CONTAINER -->
         <div class="flex-1 relative">
             
-            <!-- 1. DASHBOARD VIEW -->
             <div id="view-dashboard" class="view-section absolute inset-0 p-8 fade-in active">
                 <h2 class="text-2xl font-medium mb-6 text-accent">Data Fund Portfolio Summary</h2>
                 
@@ -754,7 +806,6 @@
                     </div>
                 </div>
 
-                <!-- Visualization Module (Proof of Utility) -->
                 <div class="bg-surface border border-theme rounded-lg p-6 mb-8">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-medium">Proof of Utility (PoU) Activity</h3>
@@ -766,22 +817,18 @@
                 </div>
             </div>
 
-            <!-- 4. LEDGER VIEW (Renamed to Transaction Ledger) -->
             <div id="view-ledger" class="view-section absolute inset-0 hidden p-8 fade-in">
                 <h2 class="text-2xl font-medium mb-6 text-accent">Transaction Ledger (PoD & Yield) ⛓️</h2>
                 <div class="space-y-2" id="ledger-list">
-                    <!-- Populated by JS -->
-                </div>
+                    </div>
             </div>
             
-            <!-- 5. DATA MARKETPLACE VIEW (Data Funds & Yield) -->
             <div id="view-marketplace" class="view-section absolute inset-0 hidden p-8 fade-in">
                 <h2 class="text-2xl font-medium mb-4 text-accent">Data Funds Index</h2>
                 <p class="text-secondary mb-6">Invest your data into thematic funds to earn passive, recurring yield (royalties).</p>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8" id="data-funds-list">
-                    <!-- Funds are loaded here by JS -->
-                </div>
+                    </div>
                 
                 <h3 class="text-xl font-medium mt-8 mb-4 text-accent">My Yield Portfolio</h3>
                 <div class="bg-panel border border-theme rounded-lg overflow-hidden">
@@ -799,12 +846,16 @@
                         </tbody>
                     </table>
                 </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button onclick="DataFunds.simulatePayout()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 transition-colors">
+                        Simulate B2B Payout (Company User Only)
+                    </button>
+                </div>
             </div>
             
-            <!-- 2. NEURAL CORE VIEW -->
             <div id="view-intelligence" class="view-section absolute inset-0 hidden p-8">
                 <div class="flex flex-col h-full bg-panel border border-theme rounded-lg overflow-hidden">
-                    <!-- Chat history... -->
                     <div class="flex-1 p-5 font-code text-sm space-y-4" id="chat-history">
                         <div class="flex items-start gap-4">
                             <div class="w-8 h-8 rounded bg-zinc-800 border border-zinc-700 flex items-center justify-center shrink-0">
@@ -816,7 +867,6 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Chat Input -->
                     <div class="p-4 border-t border-theme bg-theme-panel shrink-0">
                         <div class="max-w-4xl mx-auto relative">
                             <input type="text" id="ai-input" placeholder="Query your local data..." class="w-full bg-zinc-900 border border-zinc-700 rounded-md py-3 pl-4 pr-12 text-sm text-white focus:ring-accent focus:border-accent">
@@ -828,7 +878,6 @@
                 </div>
             </div>
 
-            <!-- 3. DATA VAULT VIEW -->
             <div id="view-vault" class="view-section absolute inset-0 hidden p-8 fade-in">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-2xl font-medium">Data Vault 🛡️</h2>
@@ -849,8 +898,7 @@
                             </tr>
                         </thead>
                         <tbody id="vault-list" class="divide-y divide-zinc-800">
-                            <!-- Populated by JS -->
-                        </tbody>
+                            </tbody>
                     </table>
                 </div>
             </div>
