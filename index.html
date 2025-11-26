@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WorldOS: Sovereign Data Funds Platform</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        /* Aesthetically Refined Deep Cyber-Teal & Mono Palette (Bloomberg/Lisp Fusion) */
+        :root {
+            --accent: #06b6d4; /* Tailwind cyan-500 (High-Viz Cyber Teal) */
+            --accent-inv: #f0f9ff; /* Tailwind sky-50 (White/Off-white) */
+            --primary: #e2e8f0; /* Tailwind slate-200 (Clean Data Text) */
+            --secondary: #94a3b8; /* Tailwind slate-400 (Metadata/Labels) */
+            --indicator-ok: #34d399; /* Tailwind emerald-400 (Positive/Yield) */
+            --indicator-warn: #facc15; /* Tailwind amber-400 (PoU/Focus/Warning) */
+            --border: #1e293b; /* Tailwind slate-800 (Clean Separators/Darker than Panel) */
+            --panel: #111827; /* Tailwind slate-900 (Card/Sidebar Background) */
+            --surface: #0a101b; /* Tailwind slate-950 (Main Background - Near Black) */
+            --text-sec: var(--secondary);
+        }
+
+        /* Applying new CSS Variables */
+        .bg-os { background-color: var(--surface); }
+        .bg-panel { background-color: var(--panel); }
+        .bg-surface-dark { background-color: var(--surface); } 
+        .border-theme { border-color: var(--border); }
+        .text-primary { color: var(--primary); }
+        .text-secondary { color: var(--secondary); }
+        .text-accent { color: var(--accent); }
+        .text-accent-inv { color: var(--accent-inv); }
+        .text-indicator-ok { color: var(--indicator-ok); }
+        .text-indicator-warn { color: var(--indicator-warn); }
+
+        .nav-item { 
+            color: var(--secondary); 
+            transition: color 0.2s, background-color 0.2s; 
+            border-left: 2px solid transparent; 
+        }
+        .nav-item:hover { color: var(--primary); }
+        .nav-item.active { 
+            color: var(--primary); 
+            background-color: rgba(6, 182, 212, 0.1); /* Subtle background for active nav */
+            border-left-color: var(--accent);
+        }
+        .nav-item.active i { color: var(--accent); }
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform {opacity: 0; transform: translateY(5px);} to { opacity: 1; transform: translateY(0); } }
+        .font-code { font-family: 'JetBrains Mono', monospace; }
+        
+        /* Adjusted Ledger Entry Style for 'Block' Aesthetic */
+        .ledger-entry { 
+            background-color: var(--panel); 
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+        }
+        .ledger-entry:hover { background-color: #1a2434; transform: translateY(-1px); } /* Subtle lift on hover */
+
+        /* Input Styling Fix: High contrast and accent focus */
+        .auth-input, .ai-input-style {
+            background-color: var(--surface); 
+            border: 1px solid var(--border); 
+            color: var(--primary);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .auth-input:focus, .ai-input-style:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent); /* Thin outer focus ring */
+            outline: none;
+        }
+    </style>
+    
+    <script type="module">
+        // Import only necessary Firestore functions for data simulation
+        import { getFirestore, doc, setDoc, updateDoc, onSnapshot, collection, query, getDocs, arrayUnion, addDoc, serverTimestamp, orderBy, getDoc, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        
+        // Expose Firebase objects globally within the module scope
+        const firebase = {
+            initializeApp,
+            getFirestore, doc, setDoc, updateDoc, onSnapshot, collection, query, getDocs,
+            arrayUnion, addDoc, serverTimestamp, orderBy, getDoc, where
+        };
+        
+        // --- GLOBAL CONSTANTS ---
+        const DB_NAME = 'WorldOS_SovereignNode_Robust';
+        const DB_VERSION = 1;
+
+        // BASE CONFIG FOR ROBUST PoU
+        const PoU_CONFIG = {
+            BASE_SCORE: 10, // Starting PoU score for any deposited asset
+            MAX_SCORE: 100,
+            CREDIBILITY_MULTIPLIERS: { // Factor 1: Credibility
+                'Verified': 1.25, // e.g., signed PDFs, government data
+                'High': 1.10, // e.g., direct API exports, trusted reports
+                'Medium': 1.00, // e.g., standard downloaded reports, parsed data
+                'Low': 0.85 // e.g., scraped content, unverified
+            },
+            GRANULARITY_ADDENDUM: { // Factor 2: Granularity (Data Set Complexity/Usefulness)
+                'High': 15, // e.g., time-series data, transactional data
+                'Medium': 10, // e.g., summaries, aggregated stats
+                'Low': 5 // e.g., simple documents, unstructured text
+            },
+            QUERY_BOOST_RANGE: [15, 30] // PoU increase from a successful AI/RAG query
+        };
+
+        // FIXED: Dummy User ID and Type for immediate access
+        let db;
+        let userId = 'DUMMY_INDIVIDUAL_USER_001';
+        let userType = 'individual';
+        let userProfile = { totalYield: 0, funds: {}, userType: 'individual' };
+
+        // Dummy Firebase Config/App ID (Needed for Firestore paths)
+        const __app_id = 'worldos-sovereign-node-demo';
+        const firebaseConfig = {
+            apiKey: "AIzaSy_dummy-api-key-for-test-ONLY",
+            authDomain: "dummy-project.firebaseapp.com",
+            projectId: "dummy-project",
+            storageBucket: "dummy-project.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:a1b2c3d4e5f6g7h8"
+        };
+
+        // --- GLOBAL STATE ---
+        let WorldState = {
+            db: null, // IndexedDB instance
+            dataFunds: [] // Firestore funds metadata
+        };
+        
+        // --- 0. DATA PERSISTENCE (INDEXEDDB - LOCAL CONTENT) ---
+        const LocalDB = {
+            init: () => {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, DB_VERSION);
+                    request.onupgradeneeded = (e) => {
+                        WorldState.db = e.target.result;
+                        WorldState.db.createObjectStore('files', { keyPath: 'id' });
+                    };
+                    request.onsuccess = (e) => { WorldState.db = e.target.result; resolve(); };
+                    request.onerror = (e) => { console.error("IndexedDB Error:", e.target.error); reject(e.target.error); };
+                });
+            },
+            getStore: (storeName, mode) => WorldState.db.transaction(storeName, mode).objectStore(storeName),
+            putFile: (file) => new Promise((resolve, reject) => {
+                const request = LocalDB.getStore('files', 'readwrite').put(file);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            }),
+            getAllFiles: () => new Promise((resolve, reject) => {
+                const request = LocalDB.getStore('files', 'readonly').getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            })
+        };
+
+        // --- CORE ROUTER (EXPOSED) ---
+        const Router = window.Router = {
+            nav: (viewId, element) => {
+                document.querySelectorAll('.view-section').forEach(el => {
+                    el.classList.add('hidden');
+                    el.classList.remove('fade-in');
+                });
+                
+                const targetView = document.getElementById('view-' + viewId);
+                targetView.classList.remove('hidden');
+                targetView.classList.add('fade-in');
+
+                document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+                if (element) element.classList.add('active');
+                
+                document.getElementById('breadcrumb').innerText = `SYSTEM // ${viewId.toUpperCase()}`;
+
+                if (viewId === 'vault') UI.renderVault();
+                if (viewId === 'ledger') UI.renderLedger();
+                if (viewId === 'marketplace') DataFunds.render();
+                if (viewId === 'intelligence') UI.renderIntelligenceView();
+            }
+        };
+
+        // --- FIREBASE INITIALIZATION (Simplified to only initialize Firestore) ---
+        const FirebaseInit = {
+            setup: async () => {
+                try {
+                    const app = firebase.initializeApp(firebaseConfig);
+                    db = firebase.getFirestore(app);
+                    
+                    FirebaseInit.loadUserProfile(userId);
+                    UI.enableApp();
+                    
+                } catch (e) {
+                    console.error("Firebase setup failed:", e);
+                }
+            },
+            loadUserProfile: (uid) => {
+                const userDocRef = firebase.doc(db, "artifacts", __app_id, "users", uid, "profile", "data");
+                
+                firebase.onSnapshot(userDocRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        userProfile = docSnap.data();
+                        userType = userProfile.userType || 'individual';
+                        // Allow company switch only if it's the right ID, otherwise revert
+                        if (userProfile.userType === 'company' && uid !== 'DUMMY_COMPANY_USER_001') {
+                            userId = 'DUMMY_COMPANY_USER_001';
+                            // Rerun with correct ID to load the company profile
+                            FirebaseInit.loadUserProfile(userId); 
+                            return;
+                        }
+                        if (userProfile.userType === 'individual' && uid !== 'DUMMY_INDIVIDUAL_USER_001') {
+                            userId = 'DUMMY_INDIVIDUAL_USER_001';
+                            FirebaseInit.loadUserProfile(userId);
+                            return;
+                        }
+                    } else {
+                        // Create a default profile if it doesn't exist
+                        userProfile = { totalYield: 0, funds: {}, userType: userType };
+                        firebase.setDoc(userDocRef, userProfile, { merge: true }); // Ensure merge for safety
+                    }
+                    UI.updateHeader();
+                    DataFunds.listen();
+                    UI.renderLedger();
+                }, (error) => console.error("Error loading user profile:", error));
+            }
+        };
+
+        // --- CORE LOGIC BLOCKS ---
+        
+        const CryptoCore = {
+            async sha256(message) {
+                const msgBuffer = new TextEncoder().encode(message);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+        };
+        
+        const PoU = {
+            // Factor 1: Credibility (Based on file extension/source)
+            determineCredibility: (filename) => {
+                const ext = filename.split('.').pop().toLowerCase();
+                if (['pdf', 'xlsx', 'db', 'sql'].includes(ext) || filename.includes('signed')) return 'Verified';
+                if (['csv', 'json', 'xml'].includes(ext)) return 'High';
+                if (['txt', 'html'].includes(ext)) return 'Medium';
+                return 'Low';
+            },
+            // Factor 2: Granularity (Based on content size and assumed structure)
+            determineGranularity: (content) => {
+                const lines = content.split('\n').length;
+                if (content.length > 5000 && lines > 50) return 'High';
+                if (content.length > 1000 && lines > 10) return 'Medium';
+                return 'Low';
+            },
+            // Initial PoU Calculation: BASE * CREDIBILITY + GRANULARITY
+            calculateInitialPoU: (filename, content) => {
+                const credibility = PoU.determineCredibility(filename);
+                const granularity = PoU.determineGranularity(content);
+                
+                const multiplier = PoU_CONFIG.CREDIBILITY_MULTIPLIERS[credibility];
+                const addendum = PoU_CONFIG.GRANULARITY_ADDENDUM[granularity];
+                
+                let score = PoU_CONFIG.BASE_SCORE * multiplier + addendum;
+                return Math.min(PoU_CONFIG.MAX_SCORE, Math.round(score));
+            },
+            
+            // PoU Boost from RAG Query (AI.send)
+            applyQueryBoost: (currentScore) => {
+                const [min, max] = PoU_CONFIG.QUERY_BOOST_RANGE;
+                const boost = min + Math.floor(Math.random() * (max - min));
+                const newScore = currentScore + boost;
+                return Math.min(PoU_CONFIG.MAX_SCORE, newScore);
+            }
+        };
+
+        const Vault = window.Vault = {
+            ingest: async (input) => {
+                if (userType !== 'individual') return alert('Please switch to Individual Data Sovereign mode to deposit files.');
+                const file = input.files[0];
+                if (!file) return;
+
+                const text = await file.text();
+                const fileId = crypto.randomUUID();
+
+                const podHash = await CryptoCore.sha256(text + Date.now());
+                const categories = Vault.categorize(file.name, text);
+                const credibility = PoU.determineCredibility(file.name);
+                const granularity = PoU.determineGranularity(text);
+                const initialPouScore = PoU.calculateInitialPoU(file.name, text);
+                
+                const fileMetadata = {
+                    id: fileId,
+                    name: file.name,
+                    sizeKB: (file.size / 1024).toFixed(2),
+                    categories: categories, // Store as array for easy lookup
+                    marketCategory: categories.join(', '), // Store as comma-separated string for display
+                    credibility: credibility, // ADDED
+                    granularity: granularity, // ADDED
+                    pouScore: initialPouScore, 
+                    isAllocated: false,
+                    podHash: podHash,
+                    ownerId: userId,
+                    timestamp: firebase.serverTimestamp()
+                };
+
+                // FIX: Ensure all metadata is passed to LocalDB (IndexedDB)
+                await LocalDB.putFile({ id: fileId, content: text, ...fileMetadata });
+                
+                const metadataColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "fileMetadata");
+                await firebase.addDoc(metadataColRef, fileMetadata);
+                
+                const ledgerColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
+                await firebase.addDoc(ledgerColRef, {
+                    hash: podHash,
+                    action: `DEPOSIT: ${file.name} (${categories.join('/')})`,
+                    type: 'POD',
+                    details: `Initial PoU: ${initialPouScore}%`,
+                    timestamp: firebase.serverTimestamp()
+                });
+                
+                alert(`SECURE DEPOSIT COMPLETE: Initial PoU Score: ${initialPouScore}%. Now go to the **Neural Core** and run a query to boost its utility score.`);
+                input.value = '';
+                UI.renderVault();
+                UI.updateHeader();
+            },
+            categorize: (filename, content) => {
+                const lowFilename = filename.toLowerCase();
+                const lowContent = content.toLowerCase();
+                const categories = [];
+
+                if (lowFilename.includes('bank') || lowFilename.includes('tax') || lowContent.includes('chase') || lowContent.includes('amex') || lowContent.includes('financial')) {
+                    categories.push('Financial/Tax');
+                }
+                if (lowFilename.includes('mobility') || lowFilename.includes('ev') || lowContent.includes('tesla') || lowContent.includes('uber') || lowContent.includes('route')) {
+                    categories.push('Urban/Mobility');
+                }
+                if (lowFilename.includes('shopping') || lowContent.includes('amazon') || lowContent.includes('target') || lowContent.includes('receipt')) {
+                    categories.push('Retail/E-commerce');
+                }
+                if (lowFilename.includes('health') || lowFilename.includes('fitness') || lowContent.includes('heart rate') || lowContent.includes('steps') || lowContent.includes('medical')) {
+                    categories.push('Health/Wellness');
+                }
+                if (lowFilename.includes('web') || lowFilename.includes('search') || lowContent.includes('google') || lowContent.includes('browser')) {
+                    categories.push('Digital/Web');
+                }
+                return categories.length > 0 ? categories : ['General/Other'];
+            },
+        };
+
+        const DataFunds = window.DataFunds = {
+            listen: () => {
+                const fundsColRef = firebase.collection(db, "artifacts", __app_id, "public", "data", "dataFunds");
+                const q = firebase.query(fundsColRef);
+                firebase.onSnapshot(q, async (snapshot) => {
+                    WorldState.dataFunds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    // FIX: Seed funds only if none exist
+                    if (WorldState.dataFunds.length === 0) {
+                        await DataFunds.seedFunds();
+                    } 
+                    DataFunds.render();
+                }, (error) => console.error("Error loading funds:", error));
+            },
+            seedFunds: async () => {
+                const fundsColRef = firebase.collection(db, "artifacts", __app_id, "public", "data", "dataFunds");
+                const initialFunds = [
+                    { id: 'FinancialTaxFund', name: 'Normalized Tax & Finance Fund', category: 'Financial/Tax', requiredPoU: 75, currentYield: 12.5, description: 'High-value fund for global CPA and wealth management analytics.', commission: 0.15 },
+                    { id: 'UrbanEVFund', name: 'Urban EV Adopters Fund', category: 'Urban/Mobility', requiredPoU: 50, currentYield: 4.8, description: 'Mobility patterns for urban planning and automotive industry analysis.', commission: 0.10 },
+                    { id: 'HealthInsightsFund', name: 'Verified Health & Wellness Fund', category: 'Health/Wellness', requiredPoU: 60, currentYield: 8.9, description: 'Longitudinal health data for medical research and preventative care.', commission: 0.20 },
+                    { id: 'DigitalTraceFund', name: 'Premium Digital Trace Fund', category: 'Digital/Web', requiredPoU: 40, currentYield: 3.2, description: 'Validated search/browser patterns for advertising and search optimization.', commission: 0.05 }
+                ];
+                await Promise.all(initialFunds.map(fund => firebase.setDoc(firebase.doc(fundsColRef, fund.id), fund)));
+                WorldState.dataFunds = initialFunds; // Update local state immediately
+            },
+            render: () => {
+                UI.renderDataFunds();
+                UI.renderYieldPortfolio();
+            },
+            toggleFundAllocation: async (fundId, isJoining) => {
+                if (userType !== 'individual') return alert('Only individual users can allocate data to funds.');
+                
+                const files = await LocalDB.getAllFiles();
+                const fund = WorldState.dataFunds.find(f => f.id === fundId);
+                if (!fund) return alert('Fund not found.');
+
+                // Find assets that match the fund's required category and PoU score
+                const matchingAssets = files.filter(f => f.categories.includes(fund.category) && f.pouScore >= fund.requiredPoU);
+
+                const userDocRef = firebase.doc(db, "artifacts", __app_id, "users", userId, "profile", "data");
+                
+                if (isJoining) {
+                    if (matchingAssets.length === 0) return alert(`Deposit files categorized as '${fund.category}' AND with a PoU score of at least ${fund.requiredPoU}% first to join this fund. Run a query in the Neural Core to boost PoU.`);
+                    if (userProfile.funds && userProfile.funds[fundId]) {
+                        alert(`Already allocated to ${fundId}.`);
+                        return;
+                    }
+                    
+                    const weightedAssetCount = matchingAssets.reduce((sum, f) => sum + (f.pouScore / 100), 0).toFixed(2);
+                    
+                    await firebase.updateDoc(userDocRef, {
+                        [`funds.${fundId}`]: {
+                            allocationTime: firebase.serverTimestamp(),
+                            assetCount: parseFloat(weightedAssetCount),
+                            commissionRate: fund.commission 
+                        }
+                    });
+                    alert(`Successfully allocated ${matchingAssets.length} eligible assets (WAC: ${weightedAssetCount}) to ${fund.name}!`);
+                } else {
+                    if (!userProfile.funds || !userProfile.funds[fundId]) return alert('Not allocated to this fund.');
+                    
+                    let newFunds = { ...userProfile.funds };
+                    delete newFunds[fundId];
+                    await firebase.setDoc(userDocRef, { funds: newFunds }, { merge: true });
+                    alert(`Deallocated from ${fund.name}.`);
+                }
+                UI.renderYieldPortfolio();
+                UI.renderVault();
+                UI.updateHeader();
+            },
+            simulatePayout: async () => {
+                if (userType !== 'company') return alert('Please switch to Enterprise Data Buyer mode to trigger a B2B usage/payout event.');
+
+                const B2B_SDA_BUNDLE_PRICE = 50000;
+                const allUsersSnapshot = await firebase.getDocs(firebase.collection(db, "artifacts", __app_id, "users"));
+                let totalAssetCountByFund = WorldState.dataFunds.reduce((acc, fund) => ({ ...acc, [fund.id]: 0 }), {});
+                let userAssetMap = {}; 
+
+                for (const docSnap of allUsersSnapshot.docs) {
+                    const profile = docSnap.data();
+                    if (profile.userType === 'individual' && profile.funds) {
+                        userAssetMap[docSnap.id] = {};
+                        for (const fundId in profile.funds) {
+                            const fundData = profile.funds[fundId];
+                            const fundMetadata = WorldState.dataFunds.find(f => f.id === fundId);
+                            if (fundData.assetCount > 0 && fundMetadata) {
+                                totalAssetCountByFund[fundId] += fundData.assetCount;
+                                userAssetMap[docSnap.id][fundId] = { 
+                                    wac: fundData.assetCount, 
+                                    commission: fundMetadata.commission 
+                                };
+                            }
+                        }
+                    }
+                }
+                
+                const activeFunds = Object.keys(totalAssetCountByFund).filter(id => totalAssetCountByFund[id] > 0);
+                if (activeFunds.length === 0) return alert('No users currently contributing assets to any fund.');
+
+                const targetFundId = activeFunds.reduce((a, b) => totalAssetCountByFund[a] > totalAssetCountByFund[b] ? a : b);
+                const targetFundMetadata = WorldState.dataFunds.find(f => f.id === targetFundId);
+                const totalWAC = totalAssetCountByFund[targetFundId];
+                
+                const commissionRate = targetFundMetadata.commission;
+                const commission = B2B_SDA_BUNDLE_PRICE * commissionRate;
+                const payoutPool = B2B_SDA_BUNDLE_PRICE - commission;
+
+                const updatePromises = [];
+                const yieldPayouts = {};
+
+                for (const uid in userAssetMap) {
+                    if (userAssetMap[uid][targetFundId]) {
+                        const userWAC = userAssetMap[uid][targetFundId].wac;
+                        const share = userWAC / totalWAC;
+                        const payout = payoutPool * share;
+                        yieldPayouts[uid] = payout;
+                        
+                        const userRef = firebase.doc(db, "artifacts", __app_id, "users", uid, "profile", "data");
+                        
+                        // We need to fetch the current totalYield array to append the new item
+                        const currentProfile = await firebase.getDoc(userRef).then(doc => doc.data() || { totalYield: [] });
+                        const newTotalYield = currentProfile.totalYield || [];
+                        newTotalYield.push({
+                            amount: payout,
+                            date: firebase.serverTimestamp(),
+                            source: `${targetFundId} Sale`,
+                            details: `WAC: ${userWAC.toFixed(2)} / Total WAC: ${totalWAC.toFixed(2)}`
+                        });
+                        
+                        // Use setDoc with merge to update the entire totalYield array
+                        updatePromises.push(firebase.setDoc(userRef, { totalYield: newTotalYield }, { merge: true }));
+                    }
+                }
+
+                const companyLedgerRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
+                await firebase.addDoc(companyLedgerRef, {
+                    action: `B2B SDA Bundle Purchase: ${targetFundId}`,
+                    details: `Paid $${B2B_SDA_BUNDLE_PRICE.toFixed(2)}. Yield Pool: $${payoutPool.toFixed(2)}. Commission: $${commission.toFixed(2)} (${(commissionRate*100).toFixed(0)}%)`,
+                    timestamp: firebase.serverTimestamp(),
+                    type: 'COMPANY_EXPENSE',
+                    hash: await CryptoCore.sha256(JSON.stringify(yieldPayouts) + targetFundId)
+                });
+
+                await Promise.all(updatePromises);
+                alert(`SUCCESS: Simulated B2B Purchase for **${targetFundId}** and distributed $${payoutPool.toFixed(2)} yield across ${Object.keys(yieldPayouts).length} users!`);
+                UI.updateHeader();
+                UI.renderYieldPortfolio();
+                UI.renderLedger();
+            }
+        };
+
+        const AI = window.AI = {
+            send: async () => {
+                if (userType !== 'individual') return alert('Only individual users can generate Proof of Utility blocks.');
+                const input = document.getElementById('ai-input');
+                const query = input.value.trim().toLowerCase();
+                if(!query) return;
+
+                AI.appendChat('user', input.value);
+                input.value = '';
+
+                AI.appendChat('ai', 'Thinking...', true);
+                
+                setTimeout(async () => {
+                    const files = await LocalDB.getAllFiles();
+                    const hitCategories = Vault.categorize('query_placeholder', query);
+                    const hits = files.filter(f => f.categories.some(cat => hitCategories.includes(cat)));
+
+                    let response = "";
+                    const lastMsg = document.querySelector('.loading-msg');
+                    
+                    if (hits.length > 0) {
+                        const merkelRoot = await CryptoCore.sha256(query + hits.map(h => h.id).sort().join(''));
+                        
+                        let totalBoost = 0;
+                        const affectedFundIds = [];
+                        
+                        for (const hit of hits) {
+                            const originalScore = hit.pouScore;
+                            hit.pouScore = PoU.applyQueryBoost(originalScore);
+                            totalBoost += (hit.pouScore - originalScore);
+                            
+                            // FIX: Update the file metadata in Firestore 
+                            const metadataRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "fileMetadata");
+                            const q = firebase.query(metadataRef, firebase.where("id", "==", hit.id));
+                            const snapshot = await firebase.getDocs(q);
+
+                            if (!snapshot.empty) {
+                                const docRef = snapshot.docs[0].ref;
+                                await firebase.updateDoc(docRef, { pouScore: hit.pouScore });
+                            }
+
+                            await LocalDB.putFile(hit);
+                            
+                            WorldState.dataFunds.forEach(fund => {
+                                if (hit.categories.includes(fund.category) && !affectedFundIds.includes(fund.id)) {
+                                    affectedFundIds.push(fund.id);
+                                }
+                            });
+                        }
+
+                        const avgBoost = (totalBoost / hits.length).toFixed(1);
+
+                        const ledgerColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
+                        await firebase.addDoc(ledgerColRef, { 
+                            action: `POU: Generated RAG Block for ${hitCategories.join('/')}`,
+                            type: 'POU',
+                            hash: merkelRoot,
+                            fundIds: affectedFundIds,
+                            details: `Boosted ${hits.length} assets by avg ${avgBoost} points.`,
+                            timestamp: firebase.serverTimestamp()
+                        });
+
+                        response = `RAG Inference Complete. Analyzed **${hits.length}** relevant assets.\n\n`;
+                        response += `**Proof of Utility (PoU) Block Generated:** This proves data normalization and verification. Each processed asset's PoU Score increased by an average of **${avgBoost} points**.\n\n`;
+                        response += `> **Affected Funds:** ${affectedFundIds.length > 0 ? affectedFundIds.join(', ') : 'None'}. Check the Ledger for the Merkle Root hash and the Dashboard for your updated Live Average PoU Score.`;
+
+                        // Re-render affected components
+                        UI.renderLedger();
+                        UI.renderVault();
+                        UI.updateHeader();
+                    } else {
+                        response = `I searched your local vault but found no assets matching the categories implied by that query: ${hitCategories.join(', ')}. Upload relevant files first (e.g., documents containing 'tax' or 'route' data).`;
+                    }
+
+                    if (lastMsg) lastMsg.remove();
+                    AI.appendChat('ai', response);
+
+                }, 1200);
+            },
+            appendChat: (role, text, isLoading = false) => {
+                const container = document.getElementById('chat-history');
+                const div = document.createElement('div');
+                
+                const baseClasses = `flex items-start gap-4 ${role === 'user' ? 'flex-row-reverse' : ''} ${isLoading ? 'loading-msg' : ''}`;
+                const contentClasses = role === 'ai' 
+                    ? 'bg-panel border border-border text-primary' 
+                    : 'bg-accent text-accent-inv';
+                
+                const avatarContent = role === 'ai'
+                    ? '<i data-feather="cpu" class="w-4 h-4 text-indicator-ok"></i>'
+                    : '<i data-feather="user" class="w-4 h-4 text-surface"></i>'; 
+
+                const formattedText = text.replace(/\*\*(.*?)\*\*/g, `<b style="color: var(--accent);">$1</b>`).replace(/\n/g, '<br>');
+
+                div.className = baseClasses;
+                div.innerHTML = `
+                    <div class="w-8 h-8 rounded ${role === 'ai' ? 'bg-panel border border-border' : 'bg-accent'} flex items-center justify-center shrink-0">
+                        ${avatarContent}
+                    </div>
+                    <div class="${contentClasses} rounded-xl p-4 max-w-2xl text-sm leading-relaxed shadow-lg">
+                        ${formattedText}
+                    </div>
+                `;
+                container.appendChild(div);
+                container.scrollTop = container.scrollHeight;
+                feather.replace();
+            }
+        };
+
+        const UI = window.UI = {
+            toggleUserType: () => {
+                if (userType === 'individual') {
+                    userType = 'company';
+                    userId = 'DUMMY_COMPANY_USER_001';
+                } else {
+                    userType = 'individual';
+                    userId = 'DUMMY_INDIVIDUAL_USER_001';
+                }
+                
+                FirebaseInit.loadUserProfile(userId);
+                Router.nav('dashboard', document.querySelector('.nav-item.active'));
+                alert(`Switched to **${userType === 'company' ? 'Enterprise Data Buyer' : 'Individual Data Sovereign'}** mode. ID: ${userId}`);
+            },
+            enableApp: () => {
+                document.querySelectorAll('.view-section').forEach(el => el.style.pointerEvents = 'auto');
+                document.getElementById('user-display').innerText = `User ID: ${userId} | Type: ${userType}`;
+            },
+            disableApp: () => {
+                document.querySelectorAll('.view-section').forEach(el => el.style.pointerEvents = 'none');
+            },
+            updateHeader: async () => {
+                const totalYield = (userProfile.totalYield || []).reduce((sum, item) => sum + item.amount, 0);
+                document.getElementById('dash-yield').innerText = `\$${totalYield.toFixed(2)}`;
+                document.getElementById('dash-funds-count').innerText = Object.keys(userProfile.funds || {}).length;
+                document.getElementById('current-user-type').innerText = userType === 'company' ? 'Enterprise' : 'Individual';
+
+                const files = await LocalDB.getAllFiles();
+                const totalScore = files.reduce((sum, file) => sum + file.pouScore, 0);
+                const avgPoU = files.length > 0 ? (totalScore / files.length).toFixed(0) : 0;
+                const avgColor = avgPoU >= 75 ? 'text-indicator-ok' : avgPoU >= 50 ? 'text-indicator-warn' : 'text-accent'; 
+                document.getElementById('dash-pou-score').innerHTML = `<span class="${avgColor} font-code">${avgPoU}%</span>`;
+                
+                const totalSizeKB = files.reduce((sum, file) => sum + parseFloat(file.sizeKB), 0);
+                const displaySize = totalSizeKB > 1024 ? `${(totalSizeKB / 1024).toFixed(2)} MB` : `${totalSizeKB.toFixed(2)} KB`;
+                document.getElementById('storage-usage').innerText = displaySize;
+            },
+            renderVault: async () => {
+                const vaultHeader = document.getElementById('vault-header-text');
+                const fileUpload = document.getElementById('file-upload-label');
+                if (userType !== 'individual') {
+                    vaultHeader.innerText = 'Data Vault (Read-Only in Enterprise Mode)';
+                    fileUpload.classList.add('opacity-50', 'pointer-events-none');
+                } else {
+                    vaultHeader.innerText = 'Data Vault 🛡️';
+                    fileUpload.classList.remove('opacity-50', 'pointer-events-none');
+                }
+                
+                const tbody = document.getElementById('vault-list');
+                tbody.innerHTML = ''; 
+
+                const files = await LocalDB.getAllFiles();
+
+                if (files.length === 0) {
+                    // Changed colspan to 5 to match new table structure
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-secondary">Vault is empty. Deposit files to initialize local encryption.</td></tr>';
+                    return;
+                }
+
+                files.forEach(file => {
+                    const allocatedFundCategories = WorldState.dataFunds
+                        .filter(fund => userProfile.funds && userProfile.funds[fund.id])
+                        .map(fund => fund.category);
+                        
+                    const isAllocated = file.categories.some(cat => allocatedFundCategories.includes(cat));
+                    
+                    const pouColor = file.pouScore >= 75 ? 'text-indicator-ok' : file.pouScore >= 50 ? 'text-indicator-warn' : 'text-accent';
+
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-panel/50 transition-colors';
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 text-primary font-medium">${file.name}</td>
+                        <td class="px-6 py-4 text-secondary font-code text-xs">${file.marketCategory}</td>
+                        <td class="px-6 py-4 text-secondary font-code text-xs">${file.credibility}/${file.granularity}</td>
+                        <td class="px-6 py-4 ${pouColor} font-code text-xs">${file.pouScore}%</td>
+                        <td class="px-6 py-4">
+                            <span class="${isAllocated ? 'bg-accent text-surface' : 'bg-secondary text-surface'} px-2 py-1 rounded text-[10px] font-semibold">
+                                ${isAllocated ? 'ALLOCATED' : 'FREE'}
+                            </span>
+                        </td>
+                    `;
+                    tbody.prepend(tr);
+                });
+                feather.replace();
+            },
+            renderLedger: () => {
+                if (!userId) return;
+                const container = document.getElementById('ledger-list');
+                container.innerHTML = '<div class="text-center text-secondary p-5">Loading Ledger...</div>';
+                
+                const ledgerColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
+                const q = firebase.query(ledgerColRef, firebase.orderBy("timestamp", "desc"));
+
+                firebase.onSnapshot(q, (snapshot) => {
+                    container.innerHTML = '';
+                    if (snapshot.empty) {
+                        container.innerHTML = '<div class="text-center text-secondary p-5">Ledger is empty.</div>';
+                        return;
+                    }
+                    snapshot.docs.forEach(docSnap => {
+                        const block = docSnap.data();
+                        const div = document.createElement('div');
+                        const isYield = block.type === 'YIELD' || block.action.includes('Sale');
+                        const isDeposit = block.type === 'POD' || block.action.startsWith('DEPOSIT');
+                        const isPoU = block.type === 'POU';
+                        const isCompanyExpense = block.type === 'COMPANY_EXPENSE';
+                        
+                        div.className = "ledger-entry p-4 rounded font-code text-xs space-y-2 fade-in";
+                        div.innerHTML = `
+                            <div class="flex justify-between text-secondary">
+                                <span class="uppercase font-extrabold ${isPoU ? 'text-indicator-warn' : isDeposit ? 'text-accent' : isYield || isCompanyExpense ? 'text-indicator-ok' : 'text-primary'}">${block.type || 'TX'} ${isPoU && block.fundIds ? `(${block.fundIds.join(', ')})` : ''}</span>
+                                <span class="text-[10px]">${block.timestamp ? new Date(block.timestamp.toDate()).toLocaleString() : 'Pending...'}</span>
+                            </div>
+                            <div class="text-primary font-semibold truncate">
+                                ${block.action} ${block.details ? `— <span class="${isYield ? 'text-indicator-ok' : ''}">${block.details}</span>` : ''}
+                            </div>
+                            <span class="text-secondary text-[10px] block truncate opacity-70">HASH: ${block.hash ? block.hash.substring(0, 32) + '...' : 'N/A'}</span>
+                        `;
+                        container.appendChild(div);
+                    });
+                    UI.renderChart(snapshot.docs.map(doc => doc.data()));
+                });
+            },
+            renderDataFunds: () => {
+                const container = document.getElementById('data-funds-list');
+                container.innerHTML = '';
+                
+                WorldState.dataFunds.forEach(fund => {
+                    const isAllocated = userProfile.funds && userProfile.funds[fund.id];
+                    const buttonText = userType === 'individual' ? (isAllocated ? 'DE-ALLOCATE' : 'ALLOCATE ASSETS') : 'ACCESS DATA STREAM';
+                    const buttonColor = userType === 'individual' 
+                        ? (isAllocated ? 'bg-red-700 hover:bg-red-800' : 'bg-accent hover:bg-cyan-600')
+                        : 'bg-green-700 hover:bg-green-800';
+                    
+                    const card = document.createElement('div');
+                    card.className = "bg-panel border border-border p-5 rounded-lg flex flex-col justify-between shadow-xl fade-in"; 
+                    card.innerHTML = `
+                        <div>
+                            <h4 class="text-xl font-extrabold mb-1 text-primary">${fund.name}</h4>
+                            <p class="text-xs text-secondary mb-3 font-code uppercase">Category: <span class="text-accent">${fund.category}</span></p>
+                            <p class="text-5xl font-code text-indicator-warn my-3 font-extrabold">${fund.currentYield}% <span class="text-base text-secondary font-medium">Yield Target</span></p>
+                            <p class="text-sm text-secondary leading-relaxed mb-3">${fund.description}</p>
+                            <div class="flex justify-between items-center mt-3 pt-3 border-t border-border">
+                                <span class="text-xs text-secondary font-code">Min PoU: ${fund.requiredPoU}%</span>
+                                <span class="text-xs text-secondary font-code text-right">WorldOS Comm.: ${(fund.commission * 100).toFixed(0)}%</span>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex justify-end">
+                            <button onclick="${userType === 'individual' ? `DataFunds.toggleFundAllocation('${fund.id}', ${!isAllocated})` : `alert('Enterprise users only view access information here.')`}"
+                                class="text-sm text-accent-inv px-4 py-2 rounded font-semibold transition-colors ${buttonColor} ${userType !== 'individual' && 'opacity-75 cursor-not-allowed'}">
+                                ${buttonText}
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            },
+            renderYieldPortfolio: () => {
+                const tbody = document.getElementById('yield-portfolio-list');
+                tbody.innerHTML = '';
+                
+                const activeFunds = userProfile.funds || {};
+                const fundIds = Object.keys(activeFunds);
+                
+                if (fundIds.length === 0) {
+                    // Changed colspan to 5 to match new table structure
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-secondary">You are not currently allocated to any fund.</td></tr>';
+                    UI.updateHeader();
+                    return;
+                }
+                
+                fundIds.forEach(fundId => {
+                    const fund = WorldState.dataFunds.find(f => f.id === fundId);
+                    const userData = activeFunds[fundId];
+                    if (!fund) return;
+                    
+                    // Simulated Payout relies on total yield history
+                    const lastPayout = (Math.random() * 50 + 10).toFixed(2); 
+                    const commissionRate = userData.commissionRate || fund.commission;
+                    const yieldShare = userData.assetCount * 100 / (Math.random() * 100 + userData.assetCount * 1.5) ; 
+                    
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-panel/50 transition-colors';
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 text-primary font-semibold">${fund.name}</td>
+                        <td class="px-6 py-4 text-secondary font-code">${userData.assetCount.toFixed(2)} WAC</td>
+                        <td class="px-6 py-4 text-secondary font-code">${(yieldShare).toFixed(2)}%</td>
+                        <td class="px-6 py-4 text-secondary font-code">${(commissionRate * 100).toFixed(0)}%</td>
+                        <td class="px-6 py-4">
+                            <button onclick="DataFunds.toggleFundAllocation('${fundId}', false)" class="bg-red-700 text-accent-inv px-3 py-1 rounded text-xs font-semibold hover:bg-red-800 transition-colors" ${userType !== 'individual' ? 'disabled' : ''}>
+                                De-Allocate
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                UI.updateHeader();
+            },
+            renderIntelligenceView: () => {
+                const chatContainer = document.getElementById('intelligence-chat-container');
+                const chatHistory = document.getElementById('chat-history');
+                const inputContainer = document.getElementById('intelligence-input-container');
+
+                if (userType === 'company') {
+                    chatContainer.classList.add('hidden');
+                    chatHistory.classList.add('hidden'); 
+                    inputContainer.innerHTML = `
+                        <div class="p-8 text-primary h-full">
+                            <h2 class="text-3xl font-extrabold mb-4 text-accent">Enterprise Query Execution Pipeline 🚀</h2>
+                            <p class="text-secondary mb-8 text-lg">As an Enterprise Data Buyer, this view shows the **currently executing RAG Queries** used to generate the next batch of tradable SDA bundles.</p>
+                            <div class="bg-surface-dark border border-border p-6 rounded-lg space-y-4 shadow-xl">
+                                <div class="font-code text-sm text-indicator-ok"><i data-feather="check-circle" class="w-4 h-4 inline-block mr-2"></i> Query 1: Normalized Q1 2024 Financial Spend (95% Complete)</div>
+                                <div class="font-code text-sm text-indicator-warn"><i data-feather="loader" class="w-4 h-4 inline-block mr-2 animate-spin"></i> Query 2: Urban Mobility Trends Q3 2024 (23% Complete)</div>
+                                <div class="font-code text-sm text-secondary"><i data-feather="clock" class="w-4 h-4 inline-block mr-2"></i> Pending: Retail Purchase Intent (Q4) Aggregation</div>
+                            </div>
+                            <p class="mt-4 text-xs text-secondary">Purchase the finished bundles in the **Data Funds & Yield** view (Simulate B2B Payout button).</p>
+                        </div>
+                    `;
+                } else {
+                    chatContainer.classList.remove('hidden');
+                    chatHistory.classList.remove('hidden'); 
+                    inputContainer.innerHTML = `
+                        <div class="max-w-4xl mx-auto relative">
+                            <input type="text" id="ai-input" placeholder="Query your local data (e.g., 'Q3 tax data normalization')..." class="ai-input-style w-full rounded-lg py-3 pl-4 pr-12 text-sm font-medium focus:ring-1 focus:ring-accent">
+                            <button onclick="AI.send()" class="absolute right-2 top-2 p-1.5 hover:bg-panel rounded text-secondary hover:text-accent transition-colors">
+                                <i data-feather="arrow-up" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    `;
+                    
+                    const container = document.getElementById('chat-history');
+                    container.scrollTop = container.scrollHeight;
+                }
+                feather.replace();
+            },
+            renderChart: (ledgerData) => {
+                const ctx = document.getElementById('vaultChart').getContext('2d');
+                
+                const pouDates = ledgerData
+                    .filter(b => b.type === 'POU')
+                    .map(b => (b.timestamp ? new Date(b.timestamp.toDate()).toLocaleDateString() : 'Pending'));
+
+                const counts = pouDates.reduce((acc, date) => { acc[date] = (acc[date] || 0) + 1; return acc; }, {});
+
+                let cumulative = 0;
+                const labels = Object.keys(counts).sort();
+                const data = labels.map(date => cumulative += counts[date]);
+
+                if (window.vaultChartInstance) window.vaultChartInstance.destroy();
+
+                window.vaultChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Cumulative PoU Blocks',
+                            data: data,
+                            borderColor: 'var(--accent)', 
+                            backgroundColor: 'rgba(6, 182, 212, 0.2)', 
+                            tension: 0.3,
+                            fill: true,
+                            pointRadius: 4, 
+                            pointHoverRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, tooltip: { 
+                            mode: 'index', 
+                            intersect: false, 
+                            titleFont: { family: 'JetBrains Mono', weight: 'bold' },
+                            bodyFont: { family: 'JetBrains Mono' },
+                            backgroundColor: 'var(--panel)', 
+                            borderColor: 'var(--border)',
+                            borderWidth: 1,
+                            titleColor: 'var(--accent)',
+                            bodyColor: 'var(--primary)'
+                        } },
+                        scales: {
+                            y: { 
+                                beginAtZero: true, 
+                                grid: { color: 'rgba(30, 41, 59, 0.5)' }, 
+                                ticks: { color: 'var(--text-sec)', font: { family: 'JetBrains Mono' } } 
+                            },
+                            x: { 
+                                grid: { display: false }, 
+                                ticks: { color: 'var(--text-sec)', font: { family: 'JetBrains Mono' } } 
+                            }
+                        }
+                    }
+                });
+            }
+        };
+        
+        // --- INITIALIZATION BLOCK (Executes after module load) ---
+        window.onload = async () => {
+            feather.replace(); 
+            await LocalDB.init();
+            await FirebaseInit.setup();
+            Router.nav('dashboard', document.querySelector('.nav-item.active'));
+
+            // Re-attach event listener for the dynamic input in Individual mode
+            const intelligenceView = document.getElementById('view-intelligence');
+            new MutationObserver((mutationsList, observer) => {
+                const input = document.getElementById('ai-input');
+                if (input) {
+                    // Remove existing listeners to prevent duplicates
+                    input.removeEventListener('keypress', AI.send);
+                    // Attach new listener
+                    input.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') AI.send();
+                    });
+                }
+            }).observe(intelligenceView, { childList: true, subtree: true });
+        };
+    </script>
+</head>
+<body class="flex bg-os min-h-screen">
+    <aside class="w-64 bg-panel border-r border-border flex flex-col z-20 shrink-0 h-screen sticky top-0"> 
+        <div class="p-6 flex items-center gap-3 select-none border-b border-border">
+            <i data-feather="hexagon" class="text-accent w-6 h-6"></i>
+            <div>
+                <h1 class="font-extrabold tracking-tight text-xl leading-none font-code text-primary">WORL<span class="opacity-50">DOS</span></h1>
+                <span class="text-[10px] text-secondary font-code uppercase tracking-widest">Sovereign Funds</span>
+            </div>
+        </div>
+
+        <nav class="flex-1 px-4 py-6 space-y-1">
+            <button onclick="Router.nav('dashboard', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium active">
+                <i data-feather="grid" class="w-4 h-4"></i> Dashboard
+            </button>
+            <button onclick="Router.nav('intelligence', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium">
+                <i data-feather="cpu" class="w-4 h-4"></i> Neural Core (PoU)
+            </button>
+            <button onclick="Router.nav('vault', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium">
+                <i data-feather="database" class="w-4 h-4"></i> Data Vault
+            </button>
+            <button onclick="Router.nav('marketplace', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium">
+                <i data-feather="dollar-sign" class="w-4 h-4 text-indicator-ok"></i> Data Funds & Yield
+            </button>
+            <button onclick="Router.nav('ledger', this)" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium">
+                <i data-feather="list" class="w-4 h-4"></i> Transaction Ledger
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-border">
+             <button onclick="UI.toggleUserType()" class="w-full text-secondary hover:text-accent text-sm flex items-center gap-2 transition-colors mb-3 font-semibold">
+                <i data-feather="repeat" class="w-4 h-4"></i> Switch User Mode
+            </button>
+            <p class="text-[10px] text-zinc-600 mt-2 font-code truncate" id="user-display">User: DUMMY_INDIVIDUAL_USER_001 | Type: individual</p>
+        </div>
+    </aside>
+
+    <div id="main" class="flex-1 flex flex-col relative bg-surface-dark overflow-auto"> 
+        <header class="h-16 border-b border-border flex items-center justify-between px-8 sticky top-0 bg-panel/90 backdrop-blur-sm z-10 shrink-0">
+            <div class="text-sm font-code text-secondary">
+                <span id="current-user-type" class="font-semibold text-primary">Individual</span> Node ~ <span class="text-accent" id="breadcrumb">/dashboard</span>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 px-3 py-1 rounded-full bg-surface-dark border border-border">
+                    <i data-feather="server" class="w-3 h-3 text-secondary"></i>
+                    <span class="text-xs font-code text-primary" id="storage-usage">0 KB</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex-1 relative">
+            
+            <div id="view-dashboard" class="view-section absolute inset-0 p-8 fade-in active space-y-8">
+                <h2 class="text-3xl font-extrabold mb-6 text-primary">Financial Data Fund Summary</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-panel border border-border p-6 rounded-lg shadow-xl">
+                        <div class="text-secondary text-sm font-medium uppercase tracking-wider mb-2">Total Yield Earned</div>
+                        <div class="text-5xl font-code font-bold text-indicator-ok" id="dash-yield">$0.00</div>
+                        <div class="mt-4 text-xs text-secondary border-t border-border pt-3">Lifetime Royalties (Post-Commission)</div>
+                    </div>
+                    <div class="bg-panel border border-border p-6 rounded-lg shadow-xl">
+                        <div class="text-secondary text-sm font-medium uppercase tracking-wider mb-2">Fund Allocation</div>
+                        <div class="text-5xl font-code font-bold text-accent" id="dash-funds-count">0</div>
+                        <div class="mt-4 text-xs text-secondary border-t border-border pt-3">Active Funds Contributed To</div>
+                    </div>
+                    <div class="bg-panel border border-border p-6 rounded-lg shadow-xl">
+                        <div class="text-secondary text-sm font-medium uppercase tracking-wider mb-2">Verified Utility Score (PoU)</div>
+                        <div class="text-5xl font-code font-bold text-indicator-warn" id="dash-pou-score">0%</div>
+                        <div class="mt-4 text-xs text-secondary border-t border-border pt-3">Average PoU of All Local Assets</div>
+                    </div>
+                </div>
+
+                <div class="bg-panel border border-border rounded-lg p-6 shadow-xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold text-primary">Proof of Utility (PoU) Activity</h3>
+                        <span class="text-xs text-secondary font-code">RAG INFERENCE // DATA VALUE METRIC</span>
+                    </div>
+                    <div class="h-64">
+                        <canvas id="vaultChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-ledger" class="view-section absolute inset-0 hidden p-8 fade-in">
+                <h2 class="text-3xl font-extrabold mb-6 text-primary">Transaction Ledger (PoD & Yield) ⛓️</h2>
+                <div class="space-y-3" id="ledger-list">
+                    </div>
+            </div>
+            
+            <div id="view-marketplace" class="view-section absolute inset-0 hidden p-8 fade-in">
+                <h2 class="text-3xl font-extrabold mb-4 text-primary">Data Funds Index</h2>
+                <p class="text-secondary mb-8 text-lg">Invest your sovereign data into thematic funds to earn passive, recurring yield (royalties).</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12" id="data-funds-list">
+                    </div>
+                
+                <h3 class="text-2xl font-bold mt-8 mb-4 text-primary border-b border-border pb-2">My Yield Portfolio (Weighted Asset Count $\text{WAC} = \sum (\text{PoU} \times \text{Weight})$)</h3>
+                <div class="bg-panel border border-border rounded-lg overflow-hidden shadow-xl">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-surface-dark text-secondary font-medium border-b border-border uppercase tracking-wider">
+                            <tr>
+                                <th class="px-6 py-4">Fund Name</th>
+                                <th class="px-6 py-4">Your WAC (Yield Share)</th>
+                                <th class="px-6 py-4">Your Share</th>
+                                <th class="px-6 py-4">Platform Fee</th>
+                                <th class="px-6 py-4">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="yield-portfolio-list" class="divide-y divide-border">
+                            <tr><td colspan="5" class="px-6 py-8 text-center text-secondary">You are not currently allocated to any fund.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-8 flex justify-end">
+                    <button onclick="DataFunds.simulatePayout()" class="bg-blue-600 text-white px-5 py-2.5 rounded font-semibold hover:bg-blue-700 transition-colors shadow-lg">
+                        Simulate B2B Payout (Company User Only)
+                    </button>
+                </div>
+            </div>
+            
+            <div id="view-intelligence" class="view-section absolute inset-0 hidden p-8">
+                <div class="flex flex-col h-full bg-panel border border-border rounded-lg overflow-hidden shadow-2xl" id="intelligence-chat-container">
+                    <div class="flex-1 p-6 font-code text-sm space-y-6 overflow-y-auto" id="chat-history">
+                        <div class="flex items-start gap-4">
+                            <div class="w-8 h-8 rounded bg-panel border border-border flex items-center justify-center shrink-0">
+                                <i data-feather="cpu" class="w-4 h-4 text-indicator-ok"></i>
+                            </div>
+                            <div class="bg-panel border border-border rounded-xl p-4 max-w-2xl text-sm leading-relaxed text-primary shadow-lg">
+                                <p><b style="color: var(--accent);">Neural Core Online.</b> Ready for RAG queries on your uploaded **financial assets** (e.g., "Normalize Q4 spend").</p>
+                                <p class="mt-2 text-secondary">This process generates **Proof of Utility (PoU)** blocks, boosting the value of your Data Fund allocations.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-4 border-t border-border bg-surface-dark shrink-0" id="intelligence-input-container">
+                        <div class="max-w-4xl mx-auto relative">
+                            <input type="text" id="ai-input" placeholder="Query your local data (e.g., 'Q3 tax data normalization')..." class="ai-input-style w-full rounded-lg py-3 pl-4 pr-12 text-sm font-medium focus:ring-1 focus:ring-accent">
+                            <button onclick="AI.send()" class="absolute right-2 top-2 p-1.5 hover:bg-panel rounded text-secondary hover:text-accent transition-colors">
+                                <i data-feather="arrow-up" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-vault" class="view-section absolute inset-0 hidden p-8 fade-in">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-extrabold text-primary" id="vault-header-text">Data Vault 🛡️</h2>
+                    <label id="file-upload-label" class="cursor-pointer bg-accent text-accent-inv hover:bg-cyan-600 px-5 py-2.5 rounded font-semibold text-sm transition-colors flex items-center gap-2 shadow-lg">
+                        <i data-feather="upload-cloud" class="w-4 h-4"></i> Deposit Financial Data
+                        <input type="file" class="hidden" id="file-upload" onchange="Vault.ingest(this)">
+                    </label>
+                </div>
+
+                <div class="bg-panel border border-border rounded-lg overflow-hidden shadow-xl">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-surface-dark text-secondary font-medium border-b border-border uppercase tracking-wider">
+                            <tr>
+                                <th class="px-6 py-4">Asset Name</th>
+                                <th class="px-6 py-4">Category(s)</th>
+                                <th class="px-6 py-4">Source/Granularity</th>
+                                <th class="px-6 py-4">PoU Score</th>
+                                <th class="px-6 py-4">Allocation</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vault-list" class="divide-y divide-border">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>
