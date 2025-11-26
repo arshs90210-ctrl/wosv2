@@ -91,25 +91,29 @@
         };
         
         // --- GLOBAL CONSTANTS ---
-        const DB_NAME = 'WorldOS_SovereignNode_Robust';
+        const DB_NAME = 'WorldOS_SovereignNode_IAV'; // Updated DB name for new structure
         const DB_VERSION = 1;
 
-        // BASE CONFIG FOR ROBUST PoU
+        // BASE CONFIG FOR ROBUST PoU & IAV
         const PoU_CONFIG = {
-            BASE_SCORE: 10, // Starting PoU score for any deposited asset
+            BASE_SCORE: 10, 
             MAX_SCORE: 100,
+            // NEW: Base value per asset (simulated)
+            BASE_VALUE_PER_ASSET: 0.50, // $0.50 base worth for low quality asset
+            SCARCITY_MULTIPLIER: 1.5, // Multiplier for data types that are typically scarce/high demand
+            
             CREDIBILITY_MULTIPLIERS: { // Factor 1: Credibility
-                'Verified': 1.25, // e.g., signed PDFs, government data
-                'High': 1.10, // e.g., direct API exports, trusted reports
-                'Medium': 1.00, // e.g., standard downloaded reports, parsed data
-                'Low': 0.85 // e.g., scraped content, unverified
+                'Verified': 1.25, 
+                'High': 1.10, 
+                'Medium': 1.00, 
+                'Low': 0.85 
             },
             GRANULARITY_ADDENDUM: { // Factor 2: Granularity (Data Set Complexity/Usefulness)
-                'High': 15, // e.g., time-series data, transactional data
-                'Medium': 10, // e.g., summaries, aggregated stats
-                'Low': 5 // e.g., simple documents, unstructured text
+                'High': 15, 
+                'Medium': 10, 
+                'Low': 5 
             },
-            QUERY_BOOST_RANGE: [15, 30] // PoU increase from a successful AI/RAG query
+            QUERY_BOOST_RANGE: [15, 30] 
         };
 
         // FIXED: Dummy User ID and Type for immediate access
@@ -269,6 +273,27 @@
                 return Math.min(PoU_CONFIG.MAX_SCORE, Math.round(score));
             },
             
+            // NEW: Initial Asset Value (IAV) Calculation
+            // IAV = BASE_VALUE * (PoU Score / 100) * SCARCITY_MULTIPLIER
+            calculateInitialAssetValue: (pouScore, categories) => {
+                let value = PoU_CONFIG.BASE_VALUE_PER_ASSET;
+                let finalValue = 0;
+
+                // Apply PoU weight (Quality factor)
+                value = value * (pouScore / 100);
+
+                // Apply scarcity multiplier based on category (Demand factor)
+                if (categories.includes('Financial/Tax') || categories.includes('Health/Wellness')) {
+                    value *= PoU_CONFIG.SCARCITY_MULTIPLIER;
+                }
+                
+                // Apply slight randomness for market fluctuation simulation
+                finalValue = value * (0.9 + Math.random() * 0.2); // +/- 10% fluctuation
+                
+                // Set a floor/ceiling for visibility/realism
+                return Math.max(0.01, finalValue);
+            },
+
             // PoU Boost from RAG Query (AI.send)
             applyQueryBoost: (currentScore) => {
                 const [min, max] = PoU_CONFIG.QUERY_BOOST_RANGE;
@@ -293,22 +318,26 @@
                 const granularity = PoU.determineGranularity(text);
                 const initialPouScore = PoU.calculateInitialPoU(file.name, text);
                 
+                // NEW: Calculate the Initial Asset Value (IAV)
+                const initialAssetValue = PoU.calculateInitialAssetValue(initialPouScore, categories);
+                
                 const fileMetadata = {
                     id: fileId,
                     name: file.name,
                     sizeKB: (file.size / 1024).toFixed(2),
-                    categories: categories, // Store as array for easy lookup
-                    marketCategory: categories.join(', '), // Store as comma-separated string for display
-                    credibility: credibility, // ADDED
-                    granularity: granularity, // ADDED
+                    categories: categories, 
+                    marketCategory: categories.join(', '), 
+                    credibility: credibility, 
+                    granularity: granularity, 
                     pouScore: initialPouScore, 
+                    // NEW: Store IAV
+                    initialAssetValue: initialAssetValue.toFixed(2),
                     isAllocated: false,
                     podHash: podHash,
                     ownerId: userId,
                     timestamp: firebase.serverTimestamp()
                 };
 
-                // FIX: Ensure all metadata is passed to LocalDB (IndexedDB)
                 await LocalDB.putFile({ id: fileId, content: text, ...fileMetadata });
                 
                 const metadataColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "fileMetadata");
@@ -319,11 +348,12 @@
                     hash: podHash,
                     action: `DEPOSIT: ${file.name} (${categories.join('/')})`,
                     type: 'POD',
-                    details: `Initial PoU: ${initialPouScore}%`,
+                    details: `IAV: $${initialAssetValue.toFixed(2)}, PoU: ${initialPouScore}%`, // Updated detail
                     timestamp: firebase.serverTimestamp()
                 });
                 
-                alert(`SECURE DEPOSIT COMPLETE: Initial PoU Score: ${initialPouScore}%. Now go to the **Neural Core** and run a query to boost its utility score.`);
+                // NEW: Updated Alert message for instant value feedback
+                alert(`SECURE DEPOSIT COMPLETE: Initial Value (IAV): $${initialAssetValue.toFixed(2)}. PoU Score: ${initialPouScore}%. Now increase your PoU by querying this data in the Neural Core.`);
                 input.value = '';
                 UI.renderVault();
                 UI.updateHeader();
@@ -387,7 +417,6 @@
                 const fund = WorldState.dataFunds.find(f => f.id === fundId);
                 if (!fund) return alert('Fund not found.');
 
-                // Find assets that match the fund's required category and PoU score
                 const matchingAssets = files.filter(f => f.categories.includes(fund.category) && f.pouScore >= fund.requiredPoU);
 
                 const userDocRef = firebase.doc(db, "artifacts", __app_id, "users", userId, "profile", "data");
@@ -470,7 +499,6 @@
                         
                         const userRef = firebase.doc(db, "artifacts", __app_id, "users", uid, "profile", "data");
                         
-                        // We need to fetch the current totalYield array to append the new item
                         const currentProfile = await firebase.getDoc(userRef).then(doc => doc.data() || { totalYield: [] });
                         const newTotalYield = currentProfile.totalYield || [];
                         newTotalYield.push({
@@ -480,7 +508,6 @@
                             details: `WAC: ${userWAC.toFixed(2)} / Total WAC: ${totalWAC.toFixed(2)}`
                         });
                         
-                        // Use setDoc with merge to update the entire totalYield array
                         updatePromises.push(firebase.setDoc(userRef, { totalYield: newTotalYield }, { merge: true }));
                     }
                 }
@@ -533,7 +560,7 @@
                             hit.pouScore = PoU.applyQueryBoost(originalScore);
                             totalBoost += (hit.pouScore - originalScore);
                             
-                            // FIX: Update the file metadata in Firestore 
+                            // Update Firestore and LocalDB with new PoU Score
                             const metadataRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "fileMetadata");
                             const q = firebase.query(metadataRef, firebase.where("id", "==", hit.id));
                             const snapshot = await firebase.getDocs(q);
@@ -644,6 +671,10 @@
                 const avgColor = avgPoU >= 75 ? 'text-indicator-ok' : avgPoU >= 50 ? 'text-indicator-warn' : 'text-accent'; 
                 document.getElementById('dash-pou-score').innerHTML = `<span class="${avgColor} font-code">${avgPoU}%</span>`;
                 
+                // NEW: Calculate Total Estimated IAV for dashboard
+                const totalIAV = files.reduce((sum, file) => sum + parseFloat(file.initialAssetValue || 0), 0);
+                document.getElementById('total-iav').innerText = `\$${totalIAV.toFixed(2)}`;
+
                 const totalSizeKB = files.reduce((sum, file) => sum + parseFloat(file.sizeKB), 0);
                 const displaySize = totalSizeKB > 1024 ? `${(totalSizeKB / 1024).toFixed(2)} MB` : `${totalSizeKB.toFixed(2)} KB`;
                 document.getElementById('storage-usage').innerText = displaySize;
@@ -665,8 +696,8 @@
                 const files = await LocalDB.getAllFiles();
 
                 if (files.length === 0) {
-                    // Changed colspan to 5 to match new table structure
-                    tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-12 text-center text-secondary">Vault is empty. Deposit files to initialize local encryption.</td></tr>';
+                    // Changed colspan to 6 to match new table structure (Asset Name, Category, Source, IAV, PoU, Allocation)
+                    tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-secondary">Vault is empty. Deposit files to initialize local encryption.</td></tr>';
                     return;
                 }
 
@@ -678,14 +709,15 @@
                     const isAllocated = file.categories.some(cat => allocatedFundCategories.includes(cat));
                     
                     const pouColor = file.pouScore >= 75 ? 'text-indicator-ok' : file.pouScore >= 50 ? 'text-indicator-warn' : 'text-accent';
-
+                    const iav = file.initialAssetValue || '0.00'; 
+                    
                     const tr = document.createElement('tr');
                     tr.className = 'hover:bg-panel/50 transition-colors';
                     tr.innerHTML = `
                         <td class="px-6 py-4 text-primary font-medium">${file.name}</td>
                         <td class="px-6 py-4 text-secondary font-code text-xs">${file.marketCategory}</td>
                         <td class="px-6 py-4 text-secondary font-code text-xs">${file.credibility}/${file.granularity}</td>
-                        <td class="px-6 py-4 ${pouColor} font-code text-xs">${file.pouScore}%</td>
+                        <td class="px-6 py-4 text-indicator-ok font-code text-xs">$${iav}</td> <td class="px-6 py-4 ${pouColor} font-code text-xs">${file.pouScore}%</td>
                         <td class="px-6 py-4">
                             <span class="${isAllocated ? 'bg-accent text-surface' : 'bg-secondary text-surface'} px-2 py-1 rounded text-[10px] font-semibold">
                                 ${isAllocated ? 'ALLOCATED' : 'FREE'}
@@ -725,7 +757,7 @@
                                 <span class="text-[10px]">${block.timestamp ? new Date(block.timestamp.toDate()).toLocaleString() : 'Pending...'}</span>
                             </div>
                             <div class="text-primary font-semibold truncate">
-                                ${block.action} ${block.details ? `— <span class="${isYield ? 'text-indicator-ok' : ''}">${block.details}</span>` : ''}
+                                ${block.action} ${block.details ? `— <span class="${isYield || isDeposit ? 'text-indicator-ok' : ''}">${block.details}</span>` : ''}
                             </div>
                             <span class="text-secondary text-[10px] block truncate opacity-70">HASH: ${block.hash ? block.hash.substring(0, 32) + '...' : 'N/A'}</span>
                         `;
@@ -776,7 +808,6 @@
                 const fundIds = Object.keys(activeFunds);
                 
                 if (fundIds.length === 0) {
-                    // Changed colspan to 5 to match new table structure
                     tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-secondary">You are not currently allocated to any fund.</td></tr>';
                     UI.updateHeader();
                     return;
@@ -787,8 +818,6 @@
                     const userData = activeFunds[fundId];
                     if (!fund) return;
                     
-                    // Simulated Payout relies on total yield history
-                    const lastPayout = (Math.random() * 50 + 10).toFixed(2); 
                     const commissionRate = userData.commissionRate || fund.commission;
                     const yieldShare = userData.assetCount * 100 / (Math.random() * 100 + userData.assetCount * 1.5) ; 
                     
@@ -983,11 +1012,15 @@
             <div id="view-dashboard" class="view-section absolute inset-0 p-8 fade-in active space-y-8">
                 <h2 class="text-3xl font-extrabold mb-6 text-primary">Financial Data Fund Summary</h2>
                 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="bg-panel border border-border p-6 rounded-lg shadow-xl">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6"> <div class="bg-panel border border-border p-6 rounded-lg shadow-xl">
                         <div class="text-secondary text-sm font-medium uppercase tracking-wider mb-2">Total Yield Earned</div>
                         <div class="text-5xl font-code font-bold text-indicator-ok" id="dash-yield">$0.00</div>
                         <div class="mt-4 text-xs text-secondary border-t border-border pt-3">Lifetime Royalties (Post-Commission)</div>
+                    </div>
+                    <div class="bg-panel border border-border p-6 rounded-lg shadow-xl">
+                         <div class="text-secondary text-sm font-medium uppercase tracking-wider mb-2">Total Initial Asset Value (IAV)</div>
+                        <div class="text-5xl font-code font-bold text-indicator-ok" id="total-iav">$0.00</div>
+                        <div class="mt-4 text-xs text-secondary border-t border-border pt-3">Sum of Estimated Initial Asset Values</div>
                     </div>
                     <div class="bg-panel border border-border p-6 rounded-lg shadow-xl">
                         <div class="text-secondary text-sm font-medium uppercase tracking-wider mb-2">Fund Allocation</div>
@@ -1090,7 +1123,7 @@
                                 <th class="px-6 py-4">Asset Name</th>
                                 <th class="px-6 py-4">Category(s)</th>
                                 <th class="px-6 py-4">Source/Granularity</th>
-                                <th class="px-6 py-4">PoU Score</th>
+                                <th class="px-6 py-4">IAV (Initial Value)</th> <th class="px-6 py-4">PoU Score</th>
                                 <th class="px-6 py-4">Allocation</th>
                             </tr>
                         </thead>
