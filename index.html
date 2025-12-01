@@ -52,7 +52,7 @@
         }
         .nav-item.active i { color: var(--accent); }
         .fade-in { animation: fadeIn 0.5s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform {opacity: 0; transform: translateY(5px);} to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .font-code { font-family: 'JetBrains Mono', monospace; }
         
         /* Adjusted Ledger Entry Style for 'Block' Aesthetic */
@@ -76,6 +76,12 @@
             box-shadow: 0 0 0 1px var(--accent); /* Thin outer focus ring */
             outline: none;
         }
+
+        /* Data Table Styles for Parser Output */
+        .data-table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; }
+        .data-table th { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); color: var(--secondary); }
+        .data-table td { padding: 8px; border-bottom: 1px solid #1e293b; color: var(--primary); }
+        .data-table tr:last-child td { border-bottom: none; }
     </style>
     
     <script type="module">
@@ -91,24 +97,24 @@
         };
         
         // --- GLOBAL CONSTANTS ---
-        const DB_NAME = 'WorldOS_SovereignNode_IAV'; // Updated DB name for new structure
+        const DB_NAME = 'WorldOS_SovereignNode_IAV_v2'; 
         const DB_VERSION = 1;
 
         // BASE CONFIG FOR ROBUST PoU & IAV
         const PoU_CONFIG = {
             BASE_SCORE: 10, 
             MAX_SCORE: 100,
-            // NEW: Base value per asset (simulated)
-            BASE_VALUE_PER_ASSET: 0.50, // $0.50 base worth for low quality asset
-            SCARCITY_MULTIPLIER: 1.5, // Multiplier for data types that are typically scarce/high demand
+            BASE_VALUE_PER_ASSET: 0.50,
+            SCARCITY_MULTIPLIER: 1.5,
+            STRUCTURED_MULTIPLIER: 2.0, // NEW: Multiplier for Parsed/Structured Data
             
-            CREDIBILITY_MULTIPLIERS: { // Factor 1: Credibility
+            CREDIBILITY_MULTIPLIERS: { 
                 'Verified': 1.25, 
                 'High': 1.10, 
                 'Medium': 1.00, 
                 'Low': 0.85 
             },
-            GRANULARITY_ADDENDUM: { // Factor 2: Granularity (Data Set Complexity/Usefulness)
+            GRANULARITY_ADDENDUM: { 
                 'High': 15, 
                 'Medium': 10, 
                 'Low': 5 
@@ -146,7 +152,9 @@
                     const request = indexedDB.open(DB_NAME, DB_VERSION);
                     request.onupgradeneeded = (e) => {
                         WorldState.db = e.target.result;
-                        WorldState.db.createObjectStore('files', { keyPath: 'id' });
+                        if (!WorldState.db.objectStoreNames.contains('files')) {
+                            WorldState.db.createObjectStore('files', { keyPath: 'id' });
+                        }
                     };
                     request.onsuccess = (e) => { WorldState.db = e.target.result; resolve(); };
                     request.onerror = (e) => { console.error("IndexedDB Error:", e.target.error); reject(e.target.error); };
@@ -189,7 +197,7 @@
             }
         };
 
-        // --- FIREBASE INITIALIZATION (Simplified to only initialize Firestore) ---
+        // --- FIREBASE INITIALIZATION ---
         const FirebaseInit = {
             setup: async () => {
                 try {
@@ -210,10 +218,9 @@
                     if (docSnap.exists()) {
                         userProfile = docSnap.data();
                         userType = userProfile.userType || 'individual';
-                        // Allow company switch only if it's the right ID, otherwise revert
+                        // Allow company switch logic (kept from original)
                         if (userProfile.userType === 'company' && uid !== 'DUMMY_COMPANY_USER_001') {
                             userId = 'DUMMY_COMPANY_USER_001';
-                            // Rerun with correct ID to load the company profile
                             FirebaseInit.loadUserProfile(userId); 
                             return;
                         }
@@ -223,9 +230,8 @@
                             return;
                         }
                     } else {
-                        // Create a default profile if it doesn't exist
                         userProfile = { totalYield: 0, funds: {}, userType: userType };
-                        firebase.setDoc(userDocRef, userProfile, { merge: true }); // Ensure merge for safety
+                        firebase.setDoc(userDocRef, userProfile, { merge: true });
                     }
                     UI.updateHeader();
                     DataFunds.listen();
@@ -246,7 +252,6 @@
         };
         
         const PoU = {
-            // Factor 1: Credibility (Based on file extension/source)
             determineCredibility: (filename) => {
                 const ext = filename.split('.').pop().toLowerCase();
                 if (['pdf', 'xlsx', 'db', 'sql'].includes(ext) || filename.includes('signed')) return 'Verified';
@@ -254,14 +259,12 @@
                 if (['txt', 'html'].includes(ext)) return 'Medium';
                 return 'Low';
             },
-            // Factor 2: Granularity (Based on content size and assumed structure)
             determineGranularity: (content) => {
                 const lines = content.split('\n').length;
                 if (content.length > 5000 && lines > 50) return 'High';
                 if (content.length > 1000 && lines > 10) return 'Medium';
                 return 'Low';
             },
-            // Initial PoU Calculation: BASE * CREDIBILITY + GRANULARITY
             calculateInitialPoU: (filename, content) => {
                 const credibility = PoU.determineCredibility(filename);
                 const granularity = PoU.determineGranularity(content);
@@ -273,28 +276,29 @@
                 return Math.min(PoU_CONFIG.MAX_SCORE, Math.round(score));
             },
             
-            // NEW: Initial Asset Value (IAV) Calculation
-            // IAV = BASE_VALUE * (PoU Score / 100) * SCARCITY_MULTIPLIER
-            calculateInitialAssetValue: (pouScore, categories) => {
+            // IAV Calculation (Updated to include Structure Multiplier)
+            calculateAssetValue: (pouScore, categories, isStructured = false) => {
                 let value = PoU_CONFIG.BASE_VALUE_PER_ASSET;
-                let finalValue = 0;
-
-                // Apply PoU weight (Quality factor)
+                
+                // Quality factor
                 value = value * (pouScore / 100);
 
-                // Apply scarcity multiplier based on category (Demand factor)
+                // Demand factor
                 if (categories.includes('Financial/Tax') || categories.includes('Health/Wellness')) {
                     value *= PoU_CONFIG.SCARCITY_MULTIPLIER;
                 }
                 
-                // Apply slight randomness for market fluctuation simulation
-                finalValue = value * (0.9 + Math.random() * 0.2); // +/- 10% fluctuation
+                // STRUCTURE FACTOR (The Parser Value)
+                if (isStructured) {
+                    value *= PoU_CONFIG.STRUCTURED_MULTIPLIER;
+                }
                 
-                // Set a floor/ceiling for visibility/realism
-                return Math.max(0.01, finalValue);
+                // Random fluctuation
+                value = value * (0.95 + Math.random() * 0.1); 
+                
+                return Math.max(0.01, value);
             },
 
-            // PoU Boost from RAG Query (AI.send)
             applyQueryBoost: (currentScore) => {
                 const [min, max] = PoU_CONFIG.QUERY_BOOST_RANGE;
                 const boost = min + Math.floor(Math.random() * (max - min));
@@ -318,8 +322,7 @@
                 const granularity = PoU.determineGranularity(text);
                 const initialPouScore = PoU.calculateInitialPoU(file.name, text);
                 
-                // NEW: Calculate the Initial Asset Value (IAV)
-                const initialAssetValue = PoU.calculateInitialAssetValue(initialPouScore, categories);
+                const initialAssetValue = PoU.calculateAssetValue(initialPouScore, categories, false);
                 
                 const fileMetadata = {
                     id: fileId,
@@ -330,9 +333,9 @@
                     credibility: credibility, 
                     granularity: granularity, 
                     pouScore: initialPouScore, 
-                    // NEW: Store IAV
                     initialAssetValue: initialAssetValue.toFixed(2),
                     isAllocated: false,
+                    isStructured: false, // Default is unstructured
                     podHash: podHash,
                     ownerId: userId,
                     timestamp: firebase.serverTimestamp()
@@ -348,12 +351,11 @@
                     hash: podHash,
                     action: `DEPOSIT: ${file.name} (${categories.join('/')})`,
                     type: 'POD',
-                    details: `IAV: $${initialAssetValue.toFixed(2)}, PoU: ${initialPouScore}%`, // Updated detail
+                    details: `IAV: $${initialAssetValue.toFixed(2)}`,
                     timestamp: firebase.serverTimestamp()
                 });
                 
-                // NEW: Updated Alert message for instant value feedback
-                alert(`SECURE DEPOSIT COMPLETE: Initial Value (IAV): $${initialAssetValue.toFixed(2)}. PoU Score: ${initialPouScore}%. Now increase your PoU by querying this data in the Neural Core.`);
+                alert(`SECURE DEPOSIT COMPLETE: Initial Value (IAV): $${initialAssetValue.toFixed(2)}. Unstructured Data.`);
                 input.value = '';
                 UI.renderVault();
                 UI.updateHeader();
@@ -388,7 +390,6 @@
                 const q = firebase.query(fundsColRef);
                 firebase.onSnapshot(q, async (snapshot) => {
                     WorldState.dataFunds = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // FIX: Seed funds only if none exist
                     if (WorldState.dataFunds.length === 0) {
                         await DataFunds.seedFunds();
                     } 
@@ -404,7 +405,7 @@
                     { id: 'DigitalTraceFund', name: 'Premium Digital Trace Fund', category: 'Digital/Web', requiredPoU: 40, currentYield: 3.2, description: 'Validated search/browser patterns for advertising and search optimization.', commission: 0.05 }
                 ];
                 await Promise.all(initialFunds.map(fund => firebase.setDoc(firebase.doc(fundsColRef, fund.id), fund)));
-                WorldState.dataFunds = initialFunds; // Update local state immediately
+                WorldState.dataFunds = initialFunds;
             },
             render: () => {
                 UI.renderDataFunds();
@@ -515,7 +516,7 @@
                 const companyLedgerRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
                 await firebase.addDoc(companyLedgerRef, {
                     action: `B2B SDA Bundle Purchase: ${targetFundId}`,
-                    details: `Paid $${B2B_SDA_BUNDLE_PRICE.toFixed(2)}. Yield Pool: $${payoutPool.toFixed(2)}. Commission: $${commission.toFixed(2)} (${(commissionRate*100).toFixed(0)}%)`,
+                    details: `Paid $${B2B_SDA_BUNDLE_PRICE.toFixed(2)}. Yield Pool: $${payoutPool.toFixed(2)}. Commission: $${commission.toFixed(2)}`,
                     timestamp: firebase.serverTimestamp(),
                     type: 'COMPANY_EXPENSE',
                     hash: await CryptoCore.sha256(JSON.stringify(yieldPayouts) + targetFundId)
@@ -529,7 +530,49 @@
             }
         };
 
+        // --- NEW: THE UNIVERSAL DATA PARSER LOGIC ---
+        const DataParser = {
+            // This mocks the LLM Extraction Logic
+            extract: async (file) => {
+                const content = file.content;
+                const cat = file.categories[0];
+                
+                // Simulate Processing Time
+                await new Promise(r => setTimeout(r, 1500));
+                
+                let extractedData = [];
+                
+                // Simulated Patterns based on Category
+                if (cat === 'Financial/Tax') {
+                    extractedData = [
+                        { Field: 'Vendor', Value: 'Acme Corp', Type: 'String' },
+                        { Field: 'Date', Value: '2025-10-12', Type: 'Date' },
+                        { Field: 'Total_Amount', Value: '$1,240.50', Type: 'Currency' },
+                        { Field: 'Tax_ID', Value: 'XX-99381', Type: 'String' }
+                    ];
+                } else if (cat === 'Urban/Mobility') {
+                     extractedData = [
+                        { Field: 'Origin', Value: 'Downtown', Type: 'Location' },
+                        { Field: 'Destination', Value: 'Airport', Type: 'Location' },
+                        { Field: 'Duration', Value: '45 mins', Type: 'Time' },
+                        { Field: 'Cost', Value: '$55.00', Type: 'Currency' }
+                    ];
+                } else {
+                     extractedData = [
+                        { Field: 'Entity', Value: 'Unknown', Type: 'String' },
+                        { Field: 'Timestamp', Value: new Date().toISOString(), Type: 'Date' },
+                        { Field: 'Sentiment', Value: 'Neutral', Type: 'Analysis' }
+                    ];
+                }
+                return extractedData;
+            }
+        };
+
         const AI = window.AI = {
+            triggerExtraction: () => {
+                 document.getElementById('ai-input').value = '/extract';
+                 AI.send();
+            },
             send: async () => {
                 if (userType !== 'individual') return alert('Only individual users can generate Proof of Utility blocks.');
                 const input = document.getElementById('ai-input');
@@ -538,6 +581,12 @@
 
                 AI.appendChat('user', input.value);
                 input.value = '';
+
+                // --- NEW: INTERCEPT FOR EXTRACTION COMMAND ---
+                if (query.startsWith('/extract') || query.includes('extract') || query.includes('parse')) {
+                     AI.runExtractionPipeline();
+                     return;
+                }
 
                 AI.appendChat('ai', 'Thinking...', true);
                 
@@ -560,16 +609,9 @@
                             hit.pouScore = PoU.applyQueryBoost(originalScore);
                             totalBoost += (hit.pouScore - originalScore);
                             
-                            // Update Firestore and LocalDB with new PoU Score
-                            const metadataRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "fileMetadata");
-                            const q = firebase.query(metadataRef, firebase.where("id", "==", hit.id));
-                            const snapshot = await firebase.getDocs(q);
-
-                            if (!snapshot.empty) {
-                                const docRef = snapshot.docs[0].ref;
-                                await firebase.updateDoc(docRef, { pouScore: hit.pouScore });
-                            }
-
+                            // Re-calculate IAV based on new PoU
+                            hit.initialAssetValue = PoU.calculateAssetValue(hit.pouScore, hit.categories, hit.isStructured).toFixed(2);
+                            
                             await LocalDB.putFile(hit);
                             
                             WorldState.dataFunds.forEach(fund => {
@@ -593,14 +635,13 @@
 
                         response = `RAG Inference Complete. Analyzed **${hits.length}** relevant assets.\n\n`;
                         response += `**Proof of Utility (PoU) Block Generated:** This proves data normalization and verification. Each processed asset's PoU Score increased by an average of **${avgBoost} points**.\n\n`;
-                        response += `> **Affected Funds:** ${affectedFundIds.length > 0 ? affectedFundIds.join(', ') : 'None'}. Check the Ledger for the Merkle Root hash and the Dashboard for your updated Live Average PoU Score.`;
+                        response += `> **Tip:** Type '/extract' to run the Universal Data Parser and convert these files to structured CSVs (Doubles Asset Value).`;
 
-                        // Re-render affected components
                         UI.renderLedger();
                         UI.renderVault();
                         UI.updateHeader();
                     } else {
-                        response = `I searched your local vault but found no assets matching the categories implied by that query: ${hitCategories.join(', ')}. Upload relevant files first (e.g., documents containing 'tax' or 'route' data).`;
+                        response = `I searched your local vault but found no assets matching the categories implied by that query: ${hitCategories.join(', ')}. Upload relevant files first.`;
                     }
 
                     if (lastMsg) lastMsg.remove();
@@ -608,6 +649,58 @@
 
                 }, 1200);
             },
+            
+            // --- NEW: THE EXTRACTION PIPELINE EXECUTION ---
+            runExtractionPipeline: async () => {
+                AI.appendChat('ai', 'Initializing Universal Data Parser... Scanning Vault for unstructured assets...', true);
+                
+                const files = await LocalDB.getAllFiles();
+                // Filter for unstructured files
+                const targets = files.filter(f => !f.isStructured);
+                
+                if (targets.length === 0) {
+                     const lastMsg = document.querySelector('.loading-msg');
+                     if(lastMsg) lastMsg.remove();
+                     AI.appendChat('ai', 'All assets in Vault are already Structured/Parsed. Upload new raw PDF/Text files to run the extractor.');
+                     return;
+                }
+                
+                const target = targets[0]; // Process one at a time for demo
+                
+                const extractedData = await DataParser.extract(target);
+                
+                // Update Asset State
+                target.isStructured = true;
+                target.initialAssetValue = PoU.calculateAssetValue(target.pouScore, target.categories, true).toFixed(2);
+                
+                await LocalDB.putFile(target);
+                
+                // Ledger Log
+                const ledgerColRef = firebase.collection(db, "artifacts", __app_id, "users", userId, "userLedger");
+                await firebase.addDoc(ledgerColRef, { 
+                    action: `PARSER: Structured ${target.name}`,
+                    type: 'VALUE_ADD',
+                    details: `IAV Doubled to $${target.initialAssetValue}. Generated CSV schema.`,
+                    timestamp: firebase.serverTimestamp()
+                });
+                
+                const lastMsg = document.querySelector('.loading-msg');
+                if(lastMsg) lastMsg.remove();
+                
+                let tableHtml = `<div class="mt-2 mb-2 overflow-hidden rounded border border-border"><table class="data-table"><thead><tr><th>Field</th><th>Value</th><th>Type</th></tr></thead><tbody>`;
+                extractedData.forEach(row => {
+                    tableHtml += `<tr><td>${row.Field}</td><td class="text-accent">${row.Value}</td><td>${row.Type}</td></tr>`;
+                });
+                tableHtml += `</tbody></table></div>`;
+                
+                const response = `**Extraction Complete for ${target.name}**\n\nI have parsed the raw text into structured JSON. This action has applied the **Structure Multiplier (2.0x)** to the asset's value.\n\n${tableHtml}\n\n[Simulated Download: ${target.name.split('.')[0]}_clean.csv]`;
+                
+                AI.appendChat('ai', response);
+                UI.renderVault();
+                UI.updateHeader();
+                UI.renderLedger();
+            },
+
             appendChat: (role, text, isLoading = false) => {
                 const container = document.getElementById('chat-history');
                 const div = document.createElement('div');
@@ -621,6 +714,7 @@
                     ? '<i data-feather="cpu" class="w-4 h-4 text-indicator-ok"></i>'
                     : '<i data-feather="user" class="w-4 h-4 text-surface"></i>'; 
 
+                // Allow HTML for the table
                 const formattedText = text.replace(/\*\*(.*?)\*\*/g, `<b style="color: var(--accent);">$1</b>`).replace(/\n/g, '<br>');
 
                 div.className = baseClasses;
@@ -628,7 +722,7 @@
                     <div class="w-8 h-8 rounded ${role === 'ai' ? 'bg-panel border border-border' : 'bg-accent'} flex items-center justify-center shrink-0">
                         ${avatarContent}
                     </div>
-                    <div class="${contentClasses} rounded-xl p-4 max-w-2xl text-sm leading-relaxed shadow-lg">
+                    <div class="${contentClasses} rounded-xl p-4 max-w-2xl text-sm leading-relaxed shadow-lg overflow-x-auto">
                         ${formattedText}
                     </div>
                 `;
@@ -671,7 +765,6 @@
                 const avgColor = avgPoU >= 75 ? 'text-indicator-ok' : avgPoU >= 50 ? 'text-indicator-warn' : 'text-accent'; 
                 document.getElementById('dash-pou-score').innerHTML = `<span class="${avgColor} font-code">${avgPoU}%</span>`;
                 
-                // NEW: Calculate Total Estimated IAV for dashboard
                 const totalIAV = files.reduce((sum, file) => sum + parseFloat(file.initialAssetValue || 0), 0);
                 document.getElementById('total-iav').innerText = `\$${totalIAV.toFixed(2)}`;
 
@@ -696,7 +789,6 @@
                 const files = await LocalDB.getAllFiles();
 
                 if (files.length === 0) {
-                    // Changed colspan to 6 to match new table structure (Asset Name, Category, Source, IAV, PoU, Allocation)
                     tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-12 text-center text-secondary">Vault is empty. Deposit files to initialize local encryption.</td></tr>';
                     return;
                 }
@@ -714,10 +806,13 @@
                     const tr = document.createElement('tr');
                     tr.className = 'hover:bg-panel/50 transition-colors';
                     tr.innerHTML = `
-                        <td class="px-6 py-4 text-primary font-medium">${file.name}</td>
+                        <td class="px-6 py-4 text-primary font-medium flex items-center gap-2">
+                             ${file.name}
+                             ${file.isStructured ? '<span class="text-[10px] bg-accent/20 text-accent px-1 rounded border border-accent/30">PARSED</span>' : ''}
+                        </td>
                         <td class="px-6 py-4 text-secondary font-code text-xs">${file.marketCategory}</td>
                         <td class="px-6 py-4 text-secondary font-code text-xs">${file.credibility}/${file.granularity}</td>
-                        <td class="px-6 py-4 text-indicator-ok font-code text-xs">$${iav}</td> <td class="px-6 py-4 ${pouColor} font-code text-xs">${file.pouScore}%</td>
+                        <td class="px-6 py-4 text-indicator-ok font-code text-xs font-bold">$${iav}</td> <td class="px-6 py-4 ${pouColor} font-code text-xs">${file.pouScore}%</td>
                         <td class="px-6 py-4">
                             <span class="${isAllocated ? 'bg-accent text-surface' : 'bg-secondary text-surface'} px-2 py-1 rounded text-[10px] font-semibold">
                                 ${isAllocated ? 'ALLOCATED' : 'FREE'}
@@ -748,16 +843,17 @@
                         const isYield = block.type === 'YIELD' || block.action.includes('Sale');
                         const isDeposit = block.type === 'POD' || block.action.startsWith('DEPOSIT');
                         const isPoU = block.type === 'POU';
+                        const isParser = block.type === 'VALUE_ADD';
                         const isCompanyExpense = block.type === 'COMPANY_EXPENSE';
                         
                         div.className = "ledger-entry p-4 rounded font-code text-xs space-y-2 fade-in";
                         div.innerHTML = `
                             <div class="flex justify-between text-secondary">
-                                <span class="uppercase font-extrabold ${isPoU ? 'text-indicator-warn' : isDeposit ? 'text-accent' : isYield || isCompanyExpense ? 'text-indicator-ok' : 'text-primary'}">${block.type || 'TX'} ${isPoU && block.fundIds ? `(${block.fundIds.join(', ')})` : ''}</span>
+                                <span class="uppercase font-extrabold ${isPoU ? 'text-indicator-warn' : isParser ? 'text-accent' : isDeposit ? 'text-accent' : isYield || isCompanyExpense ? 'text-indicator-ok' : 'text-primary'}">${block.type || 'TX'} ${isPoU && block.fundIds ? `(${block.fundIds.join(', ')})` : ''}</span>
                                 <span class="text-[10px]">${block.timestamp ? new Date(block.timestamp.toDate()).toLocaleString() : 'Pending...'}</span>
                             </div>
                             <div class="text-primary font-semibold truncate">
-                                ${block.action} ${block.details ? `— <span class="${isYield || isDeposit ? 'text-indicator-ok' : ''}">${block.details}</span>` : ''}
+                                ${block.action} ${block.details ? `— <span class="${isYield || isDeposit || isParser ? 'text-indicator-ok' : ''}">${block.details}</span>` : ''}
                             </div>
                             <span class="text-secondary text-[10px] block truncate opacity-70">HASH: ${block.hash ? block.hash.substring(0, 32) + '...' : 'N/A'}</span>
                         `;
@@ -862,11 +958,16 @@
                     chatContainer.classList.remove('hidden');
                     chatHistory.classList.remove('hidden'); 
                     inputContainer.innerHTML = `
-                        <div class="max-w-4xl mx-auto relative">
-                            <input type="text" id="ai-input" placeholder="Query your local data (e.g., 'Q3 tax data normalization')..." class="ai-input-style w-full rounded-lg py-3 pl-4 pr-12 text-sm font-medium focus:ring-1 focus:ring-accent">
-                            <button onclick="AI.send()" class="absolute right-2 top-2 p-1.5 hover:bg-panel rounded text-secondary hover:text-accent transition-colors">
-                                <i data-feather="arrow-up" class="w-4 h-4"></i>
+                        <div class="max-w-4xl mx-auto relative flex gap-2">
+                             <button onclick="AI.triggerExtraction()" class="bg-surface-dark border border-border text-accent px-3 rounded-lg hover:bg-panel transition-colors text-xs font-bold font-code" title="Run Extraction Pipeline">
+                                ⚡ PIPE
                             </button>
+                            <div class="relative flex-1">
+                                <input type="text" id="ai-input" placeholder="Query data or type '/extract' to build structured assets..." class="ai-input-style w-full rounded-lg py-3 pl-4 pr-12 text-sm font-medium focus:ring-1 focus:ring-accent">
+                                <button onclick="AI.send()" class="absolute right-2 top-2 p-1.5 hover:bg-panel rounded text-secondary hover:text-accent transition-colors">
+                                    <i data-feather="arrow-up" class="w-4 h-4"></i>
+                                </button>
+                            </div>
                         </div>
                     `;
                     
@@ -879,7 +980,7 @@
                 const ctx = document.getElementById('vaultChart').getContext('2d');
                 
                 const pouDates = ledgerData
-                    .filter(b => b.type === 'POU')
+                    .filter(b => b.type === 'POU' || b.type === 'VALUE_ADD')
                     .map(b => (b.timestamp ? new Date(b.timestamp.toDate()).toLocaleDateString() : 'Pending'));
 
                 const counts = pouDates.reduce((acc, date) => { acc[date] = (acc[date] || 0) + 1; return acc; }, {});
@@ -895,7 +996,7 @@
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: 'Cumulative PoU Blocks',
+                            label: 'Asset Value Blocks',
                             data: data,
                             borderColor: 'var(--accent)', 
                             backgroundColor: 'rgba(6, 182, 212, 0.2)', 
@@ -935,21 +1036,18 @@
             }
         };
         
-        // --- INITIALIZATION BLOCK (Executes after module load) ---
+        // --- INITIALIZATION BLOCK ---
         window.onload = async () => {
             feather.replace(); 
             await LocalDB.init();
             await FirebaseInit.setup();
             Router.nav('dashboard', document.querySelector('.nav-item.active'));
 
-            // Re-attach event listener for the dynamic input in Individual mode
             const intelligenceView = document.getElementById('view-intelligence');
             new MutationObserver((mutationsList, observer) => {
                 const input = document.getElementById('ai-input');
                 if (input) {
-                    // Remove existing listeners to prevent duplicates
                     input.removeEventListener('keypress', AI.send);
-                    // Attach new listener
                     input.addEventListener('keypress', function(e) {
                         if (e.key === 'Enter') AI.send();
                     });
@@ -1012,7 +1110,8 @@
             <div id="view-dashboard" class="view-section absolute inset-0 p-8 fade-in active space-y-8">
                 <h2 class="text-3xl font-extrabold mb-6 text-primary">Financial Data Fund Summary</h2>
                 
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-6"> <div class="bg-panel border border-border p-6 rounded-lg shadow-xl">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="bg-panel border border-border p-6 rounded-lg shadow-xl">
                         <div class="text-secondary text-sm font-medium uppercase tracking-wider mb-2">Total Yield Earned</div>
                         <div class="text-5xl font-code font-bold text-indicator-ok" id="dash-yield">$0.00</div>
                         <div class="mt-4 text-xs text-secondary border-t border-border pt-3">Lifetime Royalties (Post-Commission)</div>
@@ -1091,19 +1190,13 @@
                                 <i data-feather="cpu" class="w-4 h-4 text-indicator-ok"></i>
                             </div>
                             <div class="bg-panel border border-border rounded-xl p-4 max-w-2xl text-sm leading-relaxed text-primary shadow-lg">
-                                <p><b style="color: var(--accent);">Neural Core Online.</b> Ready for RAG queries on your uploaded **financial assets** (e.g., "Normalize Q4 spend").</p>
-                                <p class="mt-2 text-secondary">This process generates **Proof of Utility (PoU)** blocks, boosting the value of your Data Fund allocations.</p>
+                                <p><b style="color: var(--accent);">Neural Core Online.</b> Ready for RAG queries on your uploaded **financial assets**.</p>
+                                <p class="mt-2 text-secondary">Type <b style="color: var(--accent); cursor: pointer;" onclick="AI.triggerExtraction()">/extract</b> to run the **Universal Data Parser**. This will convert your unstructured Vault files into structured CSVs and **Double their Asset Value**.</p>
                             </div>
                         </div>
                     </div>
                     <div class="p-4 border-t border-border bg-surface-dark shrink-0" id="intelligence-input-container">
-                        <div class="max-w-4xl mx-auto relative">
-                            <input type="text" id="ai-input" placeholder="Query your local data (e.g., 'Q3 tax data normalization')..." class="ai-input-style w-full rounded-lg py-3 pl-4 pr-12 text-sm font-medium focus:ring-1 focus:ring-accent">
-                            <button onclick="AI.send()" class="absolute right-2 top-2 p-1.5 hover:bg-panel rounded text-secondary hover:text-accent transition-colors">
-                                <i data-feather="arrow-up" class="w-4 h-4"></i>
-                            </button>
                         </div>
-                    </div>
                 </div>
             </div>
 
